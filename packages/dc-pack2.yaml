@@ -7,6 +7,11 @@
 #
 # CONVENTION : qualificatif en SUFFIXE - "SOC Pack2" et non "Pack2 SOC".
 #
+# INVALIDATION SUR SILENCE : meme mecanisme que le pack 1, meme seuil de 3
+#   cycles. Le raisonnement complet est en tete de dc-pack1.yaml. Les deux
+#   compteurs sont INDEPENDANTS - un pack peut tomber sans l'autre, et c'est
+#   precisement le cas qu'il faut savoir distinguer.
+#
 # =============================================================================
 # HISTORIQUE - deux affirmations FAUSSES retirees le 26/08/2026
 # ---------------------------------------------------------------------------
@@ -27,9 +32,18 @@
 # semaines parce qu'elles etaient ecrites au meme endroit, du meme ton, que
 # des releves reels.
 #
+#   C'est la MEME classe de defaut que l'invalidation ci-dessus corrige, a un
+#   autre etage : une valeur perimee qui garde l'apparence d'une mesure.
+#
 # CE QUI ETAIT REELLEMENT EN CAUSE : le pack 2 etait regle sur un autre
 # protocole sur son propre ecran. Ni le cablage, ni les DIP, ni une panne.
 # =============================================================================
+
+globals:
+  - id: p2_miss
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 script:
 
@@ -42,6 +56,39 @@ script:
           id(uart_bms).write_str("~20024642E00202FD33\r");
       - delay: 500ms
       - lambda: |-
+          // Invalidation de tout ce que ce pack alimente. Appelee au 3e echec.
+          auto invalider = []() {
+            const float N = NAN;
+            id(p2_soc)->publish_state(N);
+            id(p2_voltage)->publish_state(N);
+            id(p2_current)->publish_state(N);
+            id(p2_power)->publish_state(N);
+            id(p2_temp)->publish_state(N);
+            id(p2_remaining)->publish_state(N);
+            id(p2_total)->publish_state(N);
+            id(p2_cycles)->publish_state(N);
+            id(p2_cell_min)->publish_state(N);
+            id(p2_cell_max)->publish_state(N);
+            id(p2_cell_delta)->publish_state(N);
+            sensor::Sensor *cl[16] = {
+              id(p2c01), id(p2c02), id(p2c03), id(p2c04), id(p2c05), id(p2c06),
+              id(p2c07), id(p2c08), id(p2c09), id(p2c10), id(p2c11), id(p2c12),
+              id(p2c13), id(p2c14), id(p2c15), id(p2c16)
+            };
+            for (int i = 0; i < 16; i++) cl[i]->publish_state(N);
+            id(p2_state)->publish_state("Pas de reponse");
+            id(p2_temp_raw)->publish_state("");
+            id(p2_alarm_txt)->publish_state("Pas de reponse");
+          };
+          // Un echec de plus. Au 3e consecutif on invalide.
+          auto echec = [&invalider]() {
+            id(p2_miss)++;
+            if (id(p2_miss) == 3) {
+              ESP_LOGW("p2", "3 cycles sans reponse : valeurs invalidees");
+              invalider();
+            }
+          };
+
           std::string resp;
           uint8_t c;
           while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
@@ -49,13 +96,15 @@ script:
           size_t soi = resp.find('~');
           if (soi == std::string::npos || resp.size() < soi + 20) {
             ESP_LOGW("p2", "analog : pas de reponse (%d octets)", (int) resp.size());
+            echec();
             return;
           }
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
-          if (f.size() < 16) return;
+          if (f.size() < 16) { echec(); return; }
           if (f.compare(6, 2, "00") != 0) {
             ESP_LOGW("p2", "analog : RTN=%s", f.substr(6, 2).c_str());
+            echec();
             return;
           }
           std::string info = f.substr(12, f.size() - 16);
@@ -68,18 +117,22 @@ script:
             return (int) strtol(info.substr(p, 4).c_str(), nullptr, 16);
           };
 
-          if (len < 6) return;
+          if (len < 6) { echec(); return; }
           int ncell = h2(4);
-          if (ncell < 1 || ncell > 16) return;
+          if (ncell < 1 || ncell > 16) { echec(); return; }
           int ptemp = 6 + ncell * 4;
-          if (ptemp + 2 > len) return;
+          if (ptemp + 2 > len) { echec(); return; }
           int ntemp = h2(ptemp);
-          if (ntemp < 1 || ntemp > 8) return;
+          if (ntemp < 1 || ntemp > 8) { echec(); return; }
           int attendu = 30 + ncell * 4 + ntemp * 4;
           if (len < attendu) {
             ESP_LOGW("p2", "analog : INFO %d caracteres, %d attendus", len, attendu);
+            echec();
             return;
           }
+
+          // Trame valide : le pack repond, on repart de zero.
+          id(p2_miss) = 0;
 
           int p = 6;
           sensor::Sensor *cells[16] = {
@@ -143,6 +196,9 @@ script:
   # differents (V1.0.1 cote maitre, V1.0.4 ici), que le champ est reconnu
   # comme non implemente plutot que comme un defaut de sonde.
   # Le raisonnement complet et les garde-fous sont dans dc-pack1.yaml.
+  #
+  # NE COMPTE PAS LES ECHECS : seul le script analogique sert de battement de
+  # coeur, comme cote pack 1.
   # ---------------------------------------------------------------------------
   - id: p2_alarm
     mode: single
@@ -247,6 +303,17 @@ script:
           id(p2_dsg_tmin)->publish_state((h4(42) - 2731) / 10.0f);
           id(p2_dsg_imax)->publish_state(((int16_t) h4(46)) / 10.0f);
 
+binary_sensor:
+
+  # Passe a "deconnecte" en meme temps que les valeurs sont invalidees.
+  # Independante de celle du pack 1 : c'est le couple des deux qui dit si on a
+  # perdu un pack ou tout le bus.
+  - platform: template
+    name: "${upper_devicename} Communication Pack2"
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: return id(p2_miss) < 3;
+
 sensor:
 
   - platform: template
@@ -312,6 +379,10 @@ sensor:
     icon: mdi:battery-high
     update_interval: never
 
+  # ATTENTION : ce compteur s'incremente en AMPERES-HEURES CUMULES, pas en
+  # charges completes validees. Constate le 11/09/2026 - le pack 2 est passe
+  # de 3 a 4 pendant une periode SANS aucune charge. Ne pas en deduire qu'une
+  # fin de charge a ete reconnue par le BMS : c'est l'erreur commise le 03/09.
   - platform: template
     name: "${upper_devicename} Cycles Pack2"
     id: p2_cycles
@@ -349,6 +420,7 @@ sensor:
     update_interval: never
 
   # --- Seuils de protection, diagnostic. Pas de state_class : constantes. ---
+  # NON invalides sur silence : constantes de configuration, cf. dc-pack1.yaml.
 
   - platform: template
     name: "${upper_devicename} Seuil cellule haute Pack2"
@@ -466,8 +538,9 @@ text_sensor:
     icon: mdi:battery-clock
     update_interval: never
 
-  # "OK", ou la liste de ce qui est leve. T2 a 0x02 est filtre - voir
-  # dc-pack1.yaml. Le champ brut ci-dessous n'est pas filtre.
+  # "OK", la liste de ce qui est leve, ou "Pas de reponse" apres 3 cycles
+  # muets. T2 a 0x02 est filtre - voir dc-pack1.yaml. Le champ brut ci-dessous
+  # n'est pas filtre.
   - platform: template
     name: "${upper_devicename} Alarmes Pack2"
     id: p2_alarm_txt

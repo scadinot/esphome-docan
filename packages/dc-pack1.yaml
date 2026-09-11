@@ -27,7 +27,48 @@
 # UNITE DU COURANT : 0.1 A et non les 10 mA du standard Pylontech. Etabli par
 #   derivation du compteur d'ampere-heures, recoupe par l'ecran, confirme par
 #   les limites +/-205 A du CID2=47.
+#
 # =============================================================================
+# INVALIDATION SUR SILENCE - ajoute le 11/09/2026
+# ---------------------------------------------------------------------------
+# LE PROBLEME QUE CA CORRIGE : dc-systeme.yaml refuse de publier ses agregats
+#   si une valeur de pack est NaN. Ce garde-fou ne servait A RIEN une fois le
+#   premier cycle passe.
+#
+#   Ces capteurs sont des template en update_interval: never, alimentes par
+#   publish_state. Ils valent NaN au demarrage, prennent une valeur, et ne
+#   redeviennent JAMAIS NaN d'eux-memes. Quand le pack cessait de repondre, le
+#   script sortait sans publier et le capteur gardait sa derniere valeur
+#   indefiniment. L'agregat continuait de se calculer sur une donnee morte,
+#   sans que rien ne le signale.
+#
+#   VECU AILLEURS le 11/09/2026 : les deux onduleurs Growatt etaient hors
+#   tension depuis une semaine et leurs entites affichaient toujours
+#   "Standby", "20 %" et "26.1 C". Ces valeurs ont ete rapportees comme des
+#   mesures pendant plusieurs jours. Meme mecanisme, meme classe de defaut.
+#
+# CE QUI EST FAIT : le script analogique sert de battement de coeur. Chaque
+#   echec incremente p1_miss ; chaque succes le remet a zero. Au TROISIEME
+#   echec consecutif - 90 secondes - tous les capteurs du pack sont publies a
+#   NaN et les libelles passent a "Pas de reponse".
+#
+#   Les isnan de dc-systeme deviennent alors effectifs sans y toucher, et HA
+#   affiche des entites indisponibles plutot que des chiffres perimes.
+#
+# POURQUOI TROIS ET PAS UN : une trame perdue arrive. Trois cycles manques
+#   d'affilee, non. Le seuil evite de faire clignoter tout le tableau de bord
+#   au moindre parasite sur le bus.
+#
+# CE QUI N'EST PAS INVALIDE : les seuils de protection du CID2=47. Ce sont des
+#   constantes de configuration lues une fois sur vingt ; les garder affiches
+#   pendant une panne de communication ne trompe personne.
+# =============================================================================
+
+globals:
+  - id: p1_miss
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 script:
 
@@ -40,6 +81,39 @@ script:
           id(uart_bms).write_str("~20014642E00201FD35\r");
       - delay: 500ms
       - lambda: |-
+          // Invalidation de tout ce que ce pack alimente. Appelee au 3e echec.
+          auto invalider = []() {
+            const float N = NAN;
+            id(p1_soc)->publish_state(N);
+            id(p1_voltage)->publish_state(N);
+            id(p1_current)->publish_state(N);
+            id(p1_power)->publish_state(N);
+            id(p1_temp)->publish_state(N);
+            id(p1_remaining)->publish_state(N);
+            id(p1_total)->publish_state(N);
+            id(p1_cycles)->publish_state(N);
+            id(p1_cell_min)->publish_state(N);
+            id(p1_cell_max)->publish_state(N);
+            id(p1_cell_delta)->publish_state(N);
+            sensor::Sensor *cl[16] = {
+              id(p1c01), id(p1c02), id(p1c03), id(p1c04), id(p1c05), id(p1c06),
+              id(p1c07), id(p1c08), id(p1c09), id(p1c10), id(p1c11), id(p1c12),
+              id(p1c13), id(p1c14), id(p1c15), id(p1c16)
+            };
+            for (int i = 0; i < 16; i++) cl[i]->publish_state(N);
+            id(p1_state)->publish_state("Pas de reponse");
+            id(p1_temp_raw)->publish_state("");
+            id(p1_alarm_txt)->publish_state("Pas de reponse");
+          };
+          // Un echec de plus. Au 3e consecutif on invalide.
+          auto echec = [&invalider]() {
+            id(p1_miss)++;
+            if (id(p1_miss) == 3) {
+              ESP_LOGW("p1", "3 cycles sans reponse : valeurs invalidees");
+              invalider();
+            }
+          };
+
           std::string resp;
           uint8_t c;
           while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
@@ -47,13 +121,15 @@ script:
           size_t soi = resp.find('~');
           if (soi == std::string::npos || resp.size() < soi + 20) {
             ESP_LOGW("p1", "analog : pas de reponse (%d octets)", (int) resp.size());
+            echec();
             return;
           }
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
-          if (f.size() < 16) return;
+          if (f.size() < 16) { echec(); return; }
           if (f.compare(6, 2, "00") != 0) {
             ESP_LOGW("p1", "analog : RTN=%s", f.substr(6, 2).c_str());
+            echec();
             return;
           }
           std::string info = f.substr(12, f.size() - 16);
@@ -66,18 +142,22 @@ script:
             return (int) strtol(info.substr(p, 4).c_str(), nullptr, 16);
           };
 
-          if (len < 6) return;
+          if (len < 6) { echec(); return; }
           int ncell = h2(4);
-          if (ncell < 1 || ncell > 16) return;
+          if (ncell < 1 || ncell > 16) { echec(); return; }
           int ptemp = 6 + ncell * 4;
-          if (ptemp + 2 > len) return;
+          if (ptemp + 2 > len) { echec(); return; }
           int ntemp = h2(ptemp);
-          if (ntemp < 1 || ntemp > 8) return;
+          if (ntemp < 1 || ntemp > 8) { echec(); return; }
           int attendu = 30 + ncell * 4 + ntemp * 4;
           if (len < attendu) {
             ESP_LOGW("p1", "analog : INFO %d caracteres, %d attendus", len, attendu);
+            echec();
             return;
           }
+
+          // Trame valide : le pack repond, on repart de zero.
+          id(p1_miss) = 0;
 
           int p = 6;
           sensor::Sensor *cells[16] = {
@@ -143,6 +223,11 @@ script:
   # ---------------------------------------------------------------------------
   # Codes : C01..C16 cellules | T1..T8 sondes | ICHG courant de charge
   #         VMOD tension module | IDSG courant de decharge
+  #
+  # CE SCRIPT NE COMPTE PAS LES ECHECS : c'est le script analogique qui sert de
+  #   battement de coeur, et lui seul invalide. Si l'analogique passe et que
+  #   l'alarme echoue ponctuellement, le libelle garde sa valeur - un cycle
+  #   d'alarme manque n'est pas une perte du pack.
   #
   # T2 EST FILTRE - decision du 26/08/2026, et voici pourquoi.
   #   L'octet d'alarme de la sonde 2 vaut 0x02 EN PERMANENCE. Constate sur les
@@ -281,6 +366,19 @@ script:
           id(p1_dsg_tmin)->publish_state((h4(42) - 2731) / 10.0f);
           id(p1_dsg_imax)->publish_state(((int16_t) h4(46)) / 10.0f);
 
+binary_sensor:
+
+  # Passe a "deconnecte" en meme temps que les valeurs sont invalidees.
+  # C'est l'entite a surveiller dans une automatisation : elle dit que le pack
+  # ne parle plus, la ou un capteur de mesure ne peut que se taire.
+  # Pas d'update_interval : un binary_sensor template evalue son lambda a
+  # chaque boucle et ne publie que sur changement.
+  - platform: template
+    name: "${upper_devicename} Communication Pack1"
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: return id(p1_miss) < 3;
+
 sensor:
 
   - platform: template
@@ -349,6 +447,10 @@ sensor:
     icon: mdi:battery-high
     update_interval: never
 
+  # ATTENTION : ce compteur s'incremente en AMPERES-HEURES CUMULES, pas en
+  # charges completes validees. Constate le 11/09/2026 - le pack 2 est passe
+  # de 3 a 4 pendant une periode SANS aucune charge. Ne pas en deduire qu'une
+  # fin de charge a ete reconnue par le BMS : c'est l'erreur commise le 03/09.
   - platform: template
     name: "${upper_devicename} Cycles Pack1"
     id: p1_cycles
@@ -386,6 +488,7 @@ sensor:
     update_interval: never
 
   # --- Seuils de protection, diagnostic. Pas de state_class : constantes. ---
+  # NON invalides sur silence : constantes de configuration, cf. l'en-tete.
 
   - platform: template
     name: "${upper_devicename} Seuil cellule haute Pack1"
@@ -503,8 +606,9 @@ text_sensor:
     icon: mdi:battery-clock
     update_interval: never
 
-  # "OK", ou la liste de ce qui est leve. T2 a 0x02 est filtre - voir
-  # l'encadre du script p1_alarm. Le champ brut ci-dessous n'est pas filtre.
+  # "OK", la liste de ce qui est leve, ou "Pas de reponse" apres 3 cycles
+  # muets. T2 a 0x02 est filtre - voir l'encadre du script p1_alarm. Le champ
+  # brut ci-dessous n'est pas filtre.
   - platform: template
     name: "${upper_devicename} Alarmes Pack1"
     id: p1_alarm_txt

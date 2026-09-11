@@ -23,6 +23,15 @@
 # seul pack parce que l'autre manque serait pire que ne rien publier - c'est
 # exactement le genre de valeur qu'une automatisation prendrait au serieux.
 #
+#   CE GARDE-FOU N'A ETE RENDU EFFECTIF QUE LE 11/09/2026. Les capteurs des
+#   packs sont des template en update_interval: never : ils valent NaN au
+#   demarrage puis ne le redeviennent JAMAIS d'eux-memes. Un pack muet gardait
+#   sa derniere valeur, et les isnan ci-dessous ne voyaient donc rien - ils ne
+#   protegeaient que le premier cycle suivant un redemarrage. Ce sont
+#   maintenant dc-pack1 et dc-pack2 qui republient explicitement NAN apres
+#   trois cycles sans reponse ; voir l'encadre en tete de dc-pack1.yaml.
+#   Rien n'a change ici : c'est la condition d'entree qui est devenue vraie.
+#
 # =============================================================================
 # CONVERSION EN ENERGIE - tension NOMINALE, pas instantanee
 # ---------------------------------------------------------------------------

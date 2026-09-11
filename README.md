@@ -42,6 +42,27 @@ Pondéré par la capacité, pas une moyenne des deux pourcentages. Tous les
 calculs sont gardés par `isnan` : si un pack cesse de répondre, rien n'est
 publié plutôt qu'une valeur calculée sur la moitié de la batterie.
 
+## Un pack muet ne garde plus ses valeurs
+
+Corrigé le 11/09/2026. Les capteurs des packs sont des `template` en
+`update_interval: never` : ils valent NaN au démarrage, puis **ne le
+redeviennent jamais d'eux-mêmes**. Un pack qui cessait de répondre gardait sa
+dernière valeur indéfiniment, et le garde-fou `isnan` ci-dessus ne protégeait
+donc que le premier cycle suivant un redémarrage.
+
+Le script analogique sert maintenant de battement de cœur. Au **troisième
+cycle sans réponse** — 90 s — tous les capteurs du pack repassent à NaN et les
+libellés à « Pas de réponse ». Deux entités de diagnostic le signalent :
+
+```
+Communication Pack1   connectivity
+Communication Pack2   connectivity
+```
+
+Trois et pas un : une trame perdue arrive, trois d'affilée non. Les seuils de
+protection (CID2=47) ne sont pas invalidés — ce sont des constantes de
+configuration, pas des mesures.
+
 ## Surface exploitable du BMS
 
 Établie par test le 24/08/2026, les deux formes de requête essayées :
