@@ -1,0 +1,7 @@
+# Le serveur ESPHome tourne sous Linux : les fichiers doivent rester en LF,
+# y compris dans la copie de travail Windows. Sans cela, un fichier renvoye
+# vers /config/esphome/ y arriverait en CRLF.
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.md     text eol=lf
+.gitignore text eol=lf
