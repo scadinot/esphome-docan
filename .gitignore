@@ -1,0 +1,17 @@
+# Secrets ESPHome - ne doivent jamais quitter le serveur.
+# L'outil de recuperation les exclut deja ; cette ligne est une seconde barriere.
+secrets.yaml
+secrets.yml
+
+# Artefacts de compilation ESPHome
+.esphome/
+build/
+*.bin
+*.elf
+*.map
+*.factory.bin
+
+# Windows
+Thumbs.db
+desktop.ini
+*.tmp

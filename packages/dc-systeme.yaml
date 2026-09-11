@@ -1,0 +1,270 @@
+# =============================================================================
+# VALEURS CALCULEES - agregat des deux packs, et conversions en energie
+# =============================================================================
+# PAQUET inclus par docan.yaml. Ne se compile pas seul.
+# Rien ici n'est lu sur le bus : tout est derive des mesures de dc-pack1 et
+# dc-pack2.
+#
+# CONVENTION DE NOMMAGE : le qualificatif est en SUFFIXE - "Capacite totale
+#   Systeme" et non "Systeme Capacite totale". Home Assistant classant par
+#   ordre alphabetique, les trois versions d'une meme grandeur se retrouvent
+#   ainsi cote a cote :
+#     Capacite totale Pack1 / Pack2 / Systeme
+#   Pack1 < Pack2 < Systeme : l'agregat tombe naturellement en dernier.
+#   Meme principe que les suffixes Ond1 / Ond2 du montage Growatt.
+#
+# POURQUOI L'AGREGAT EXISTE : le protocole PYLON n'expose AUCUNE trame
+# d'ensemble. Il est fait pour interroger les modules un par un. Verifie par
+# cinq voies en aout 2026 - ADR=02, INFO=02, INFO=FF, CID2=42 sans champ INFO,
+# et Modbus adresse 0x02 : rien ne renvoie de vue systeme.
+#
+# TOUS LES CALCULS SONT GARDES PAR isnan : au demarrage, ou si un pack cesse
+# de repondre, la somme ne doit PAS etre publiee. Publier la capacite d'un
+# seul pack parce que l'autre manque serait pire que ne rien publier - c'est
+# exactement le genre de valeur qu'une automatisation prendrait au serieux.
+#
+# =============================================================================
+# CONVERSION EN ENERGIE - tension NOMINALE, pas instantanee
+# ---------------------------------------------------------------------------
+# Une capacite en Ah ne devient des kWh qu'avec une tension. Deux choix
+# possibles, et un seul defendable :
+#
+#   TENSION NOMINALE, 51.2 V = 16 cellules LiFePO4 a 3.2 V   <-- retenu
+#     Chiffre stable et comparable, c'est la convention des fiches techniques.
+#     325.87 Ah x 51.2 V = 16.68 kWh par pack, 33.37 kWh pour l'ensemble.
+#
+#   TENSION INSTANTANEE
+#     Rejetee : elle varie de 43 a 57 V selon l'etat de charge et le courant.
+#     L'energie "totale" d'un pack sauterait de 20 % sans que rien ne change
+#     physiquement, et deux releves ne seraient pas comparables.
+#
+# CE QUE CE CHIFFRE N'EST PAS : une promesse. L'energie reellement restituee
+#   est inferieure - la tension s'affaisse sous charge, le rendement n'est pas
+#   parfait, et on ne descend jamais a 0 % (Prog 21 coupe a 20 % cote
+#   onduleur). C'est une valeur de plaque, utile pour dimensionner et pour
+#   comparer, pas pour predire une autonomie au watt pres.
+# =============================================================================
+# L'ANOMALIE "10 POUR 1" - deux affirmations retirees le 26/08/2026
+# ---------------------------------------------------------------------------
+# Des que le pack 2 a pu parler lui-meme, voir le detail dans dc-pack2.yaml :
+#   - le pack 2 pese 325.87 Ah, comme le pack 1. Les "32.5 Ah" venaient d'une
+#     soustraction, jamais d'une mesure.
+#   - le desequilibre de courant mesure est de 2.7 pour 1 au repos, pas de 10.
+#
+# "Repartition Pack1 Systeme" donne la part du courant total prise par le
+# premier pack. Sur deux packs identiques et sains, elle doit osciller autour
+# de 50 %.
+#
+# MAIS ELLE N'EST INTERPRETABLE QUE SOUS CHARGE. A quelques amperes, la
+# repartition est gouvernee par des differences de quelques millivolts et
+# milliohms - la moindre asymetrie de cosse produit un 70/30 sans que cela
+# signifie quoi que ce soit. A 40 A, c'est la resistance interne des packs qui
+# domine et le partage doit s'egaliser.
+#   vers 50-60 % a 40 A ....... normal, fin du dossier
+#   vers 85 % a fort courant .. resistance de contact reelle, reprendre le
+#                               cablage du pack 2 AVANT toute charge serieuse
+#
+# Le test physique discriminant reste la pince amperemetrique sur le cable
+# negatif du pack 2 : si elle lit le meme courant que le pack 1, c'est le
+# shunt du BMS qui ment ; si elle lit vraiment moins, c'est le cablage.
+# =============================================================================
+
+sensor:
+
+  # --- Agregat des deux packs, en Ah ----------------------------------------
+
+  - platform: template
+    name: "${upper_devicename} Capacite totale Systeme"
+    id: sys_total
+    unit_of_measurement: "Ah"
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-high
+    lambda: |-
+      if (isnan(id(p1_total).state) || isnan(id(p2_total).state)) return NAN;
+      return id(p1_total).state + id(p2_total).state;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Capacite restante Systeme"
+    id: sys_remaining
+    unit_of_measurement: "Ah"
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-medium
+    lambda: |-
+      if (isnan(id(p1_remaining).state) || isnan(id(p2_remaining).state)) return NAN;
+      return id(p1_remaining).state + id(p2_remaining).state;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} SOC Systeme"
+    id: sys_soc
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (isnan(id(p1_remaining).state) || isnan(id(p2_remaining).state) ||
+          isnan(id(p1_total).state)     || isnan(id(p2_total).state)) return NAN;
+      float tot = id(p1_total).state + id(p2_total).state;
+      if (tot < 0.1f) return NAN;
+      return (id(p1_remaining).state + id(p2_remaining).state) / tot * 100.0f;
+    update_interval: 30s
+
+  # Somme algebrique : positif en charge, negatif en decharge.
+  - platform: template
+    name: "${upper_devicename} Courant Systeme"
+    id: sys_current
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (isnan(id(p1_current).state) || isnan(id(p2_current).state)) return NAN;
+      return id(p1_current).state + id(p2_current).state;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Puissance Systeme"
+    id: sys_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    lambda: |-
+      if (isnan(id(p1_power).state) || isnan(id(p2_power).state)) return NAN;
+      return id(p1_power).state + id(p2_power).state;
+    update_interval: 30s
+
+  # --- Les memes capacites, en energie --------------------------------------
+  # x 51.2 V nominal / 1000. Voir l'encadre en tete de fichier : tension
+  # NOMINALE et non instantanee, sinon le chiffre sauterait de 20 % sans que
+  # rien ne change physiquement.
+
+  - platform: template
+    name: "${upper_devicename} Energie totale Pack1"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-high
+    lambda: |-
+      if (isnan(id(p1_total).state)) return NAN;
+      return id(p1_total).state * 51.2f / 1000.0f;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Energie totale Pack2"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-high
+    lambda: |-
+      if (isnan(id(p2_total).state)) return NAN;
+      return id(p2_total).state * 51.2f / 1000.0f;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Energie totale Systeme"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-high
+    lambda: |-
+      if (isnan(id(p1_total).state) || isnan(id(p2_total).state)) return NAN;
+      return (id(p1_total).state + id(p2_total).state) * 51.2f / 1000.0f;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Energie restante Pack1"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-medium
+    lambda: |-
+      if (isnan(id(p1_remaining).state)) return NAN;
+      return id(p1_remaining).state * 51.2f / 1000.0f;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Energie restante Pack2"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-medium
+    lambda: |-
+      if (isnan(id(p2_remaining).state)) return NAN;
+      return id(p2_remaining).state * 51.2f / 1000.0f;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Energie restante Systeme"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-medium
+    lambda: |-
+      if (isnan(id(p1_remaining).state) || isnan(id(p2_remaining).state)) return NAN;
+      return (id(p1_remaining).state + id(p2_remaining).state) * 51.2f / 1000.0f;
+    update_interval: 30s
+
+  # --- Diagnostic de l'anomalie ---------------------------------------------
+
+  # Part du courant total prise par le pack 1. Non publiee sous 0.5 A total :
+  # au repos le rapport n'a aucun sens et sauterait dans tous les sens.
+  - platform: template
+    name: "${upper_devicename} Repartition Pack1 Systeme"
+    id: sys_repartition
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:scale-balance
+    entity_category: diagnostic
+    lambda: |-
+      if (isnan(id(p1_current).state) || isnan(id(p2_current).state)) return NAN;
+      float i1 = id(p1_current).state;
+      float i2 = id(p2_current).state;
+      float tot = fabs(i1) + fabs(i2);
+      if (tot < 0.5f) return NAN;
+      return fabs(i1) / tot * 100.0f;
+    update_interval: 30s
+
+  # Ecart de tension entre les deux packs. En parallele ils sont relies par
+  # les memes barres : un ecart notable revele une resistance de contact.
+  - platform: template
+    name: "${upper_devicename} Ecart tension packs Systeme"
+    id: sys_ecart_v
+    unit_of_measurement: "V"
+    state_class: measurement
+    accuracy_decimals: 3
+    icon: mdi:flash-alert
+    entity_category: diagnostic
+    lambda: |-
+      if (isnan(id(p1_voltage).state) || isnan(id(p2_voltage).state)) return NAN;
+      return id(p1_voltage).state - id(p2_voltage).state;
+    update_interval: 30s
+
+text_sensor:
+
+  # Reunit les deux alarmes en une seule entite a surveiller.
+  # Rappel : "T2" est un bruit de fond permanent sur ce BMS - champ non
+  # implemente, cf. l'en-tete de docan.yaml. Tout le reste compte.
+  - platform: template
+    name: "${upper_devicename} Alarmes Systeme"
+    id: sys_alarm
+    icon: mdi:alert-circle-outline
+    lambda: |-
+      std::string a = id(p1_alarm_txt).state;
+      std::string b = id(p2_alarm_txt).state;
+      if (a.empty() && b.empty()) return {};
+      if (a.empty()) a = "?";
+      if (b.empty()) b = "?";
+      if (a == "OK" && b == "OK") return {"OK"};
+      return {"P1:" + a + "  P2:" + b};
+    update_interval: 30s

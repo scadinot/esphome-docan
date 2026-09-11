@@ -1,0 +1,340 @@
+# =============================================================================
+# TENSIONS DE CELLULES - 16 par pack
+# =============================================================================
+# PAQUET inclus par docan.yaml. Ne se compile pas seul.
+# Alimentees par les scripts p1_analog et p2_analog.
+#
+# CONVENTION : qualificatif en SUFFIXE - "Cellule 01 Pack1". Les deux packs se
+# retrouvent ainsi cote a cote pour chaque rang de cellule dans les listes
+# triees par nom.
+#
+# Toutes en diagnostic : au quotidien ce sont "Cellule Min", "Cellule Max" et
+# surtout "Delta Cellules" qu'on regarde. Le detail par cellule sert quand le
+# delta se degrade - il designe alors la coupable.
+#
+# REPERE : au 26/08/2026, le pack 1 au repos tenait 3.328 a 3.331 V, soit
+# 3 mV d'ecart sur seize cellules. Excellent equilibrage. Une derive vers
+# plusieurs dizaines de mV serait le premier signe d'une cellule fatiguee.
+# =============================================================================
+
+sensor:
+
+  - platform: template
+    name: "${upper_devicename} Cellule 01 Pack1"
+    id: p1c01
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 02 Pack1"
+    id: p1c02
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 03 Pack1"
+    id: p1c03
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 04 Pack1"
+    id: p1c04
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 05 Pack1"
+    id: p1c05
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 06 Pack1"
+    id: p1c06
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 07 Pack1"
+    id: p1c07
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 08 Pack1"
+    id: p1c08
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 09 Pack1"
+    id: p1c09
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 10 Pack1"
+    id: p1c10
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 11 Pack1"
+    id: p1c11
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 12 Pack1"
+    id: p1c12
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 13 Pack1"
+    id: p1c13
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 14 Pack1"
+    id: p1c14
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 15 Pack1"
+    id: p1c15
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 16 Pack1"
+    id: p1c16
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 01 Pack2"
+    id: p2c01
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 02 Pack2"
+    id: p2c02
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 03 Pack2"
+    id: p2c03
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 04 Pack2"
+    id: p2c04
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 05 Pack2"
+    id: p2c05
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 06 Pack2"
+    id: p2c06
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 07 Pack2"
+    id: p2c07
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 08 Pack2"
+    id: p2c08
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 09 Pack2"
+    id: p2c09
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 10 Pack2"
+    id: p2c10
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 11 Pack2"
+    id: p2c11
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 12 Pack2"
+    id: p2c12
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 13 Pack2"
+    id: p2c13
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 14 Pack2"
+    id: p2c14
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 15 Pack2"
+    id: p2c15
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule 16 Pack2"
+    id: p2c16
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never

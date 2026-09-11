@@ -1,0 +1,489 @@
+# =============================================================================
+# PACK 2 - adresse PYLON 02 (BMS esclave)
+# =============================================================================
+# PAQUET inclus par docan.yaml. Ne se compile pas seul.
+# Structure identique a dc-pack1.yaml : les commentaires de fond, le format
+# des trames et les pieges de parsing y sont documentes une seule fois.
+#
+# CONVENTION : qualificatif en SUFFIXE - "SOC Pack2" et non "Pack2 SOC".
+#
+# =============================================================================
+# HISTORIQUE - deux affirmations FAUSSES retirees le 26/08/2026
+# ---------------------------------------------------------------------------
+# Tant que le pack 2 restait muet, deux chiffres ont circule ici comme des
+# faits. Ils ne l'etaient pas. Des que le pack a pu parler lui-meme :
+#
+#   "32.5 Ah"  ->  FAUX. Le pack 2 declare 325.87 Ah, comme le pack 1.
+#     Ce nombre venait d'une SOUSTRACTION faite en aout (358.4 - 325.87), donc
+#     d'une hypothese, et avait ensuite ete recopie comme une mesure. Le seul
+#     capteur qui aurait pu le confirmer etait injoignable.
+#
+#   "rapport de 10 pour 1"  ->  NON REPRODUIT. Mesure au repos : -1.9 A contre
+#     -0.7 A, soit 2.7 pour 1. Et a quelques amperes ce rapport ne prouve rien
+#     du tout (voir dc-systeme.yaml).
+#
+# LA LECON, qui vaut pour la suite : une valeur derivee d'une autre ne doit
+# jamais etre notee comme une observation. Ces deux-la ont survecu des
+# semaines parce qu'elles etaient ecrites au meme endroit, du meme ton, que
+# des releves reels.
+#
+# CE QUI ETAIT REELLEMENT EN CAUSE : le pack 2 etait regle sur un autre
+# protocole sur son propre ecran. Ni le cablage, ni les DIP, ni une panne.
+# =============================================================================
+
+script:
+
+  - id: p2_analog
+    mode: single
+    then:
+      - lambda: |-
+          uint8_t c;
+          while (id(uart_bms).available()) id(uart_bms).read_byte(&c);
+          id(uart_bms).write_str("~20024642E00202FD33\r");
+      - delay: 500ms
+      - lambda: |-
+          std::string resp;
+          uint8_t c;
+          while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
+
+          size_t soi = resp.find('~');
+          if (soi == std::string::npos || resp.size() < soi + 20) {
+            ESP_LOGW("p2", "analog : pas de reponse (%d octets)", (int) resp.size());
+            return;
+          }
+          std::string f = resp.substr(soi + 1);
+          while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
+          if (f.size() < 16) return;
+          if (f.compare(6, 2, "00") != 0) {
+            ESP_LOGW("p2", "analog : RTN=%s", f.substr(6, 2).c_str());
+            return;
+          }
+          std::string info = f.substr(12, f.size() - 16);
+          int len = (int) info.size();
+
+          auto h2 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 2).c_str(), nullptr, 16);
+          };
+          auto h4 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 4).c_str(), nullptr, 16);
+          };
+
+          if (len < 6) return;
+          int ncell = h2(4);
+          if (ncell < 1 || ncell > 16) return;
+          int ptemp = 6 + ncell * 4;
+          if (ptemp + 2 > len) return;
+          int ntemp = h2(ptemp);
+          if (ntemp < 1 || ntemp > 8) return;
+          int attendu = 30 + ncell * 4 + ntemp * 4;
+          if (len < attendu) {
+            ESP_LOGW("p2", "analog : INFO %d caracteres, %d attendus", len, attendu);
+            return;
+          }
+
+          int p = 6;
+          sensor::Sensor *cells[16] = {
+            id(p2c01), id(p2c02), id(p2c03), id(p2c04), id(p2c05), id(p2c06),
+            id(p2c07), id(p2c08), id(p2c09), id(p2c10), id(p2c11), id(p2c12),
+            id(p2c13), id(p2c14), id(p2c15), id(p2c16)
+          };
+          int vmin = 99999, vmax = 0;
+          for (int i = 0; i < ncell; i++) {
+            int mv = h4(p + i * 4);
+            cells[i]->publish_state(mv / 1000.0f);
+            if (mv < vmin) vmin = mv;
+            if (mv > vmax) vmax = mv;
+          }
+          p += ncell * 4;
+          id(p2_cell_min)->publish_state(vmin / 1000.0f);
+          id(p2_cell_max)->publish_state(vmax / 1000.0f);
+          id(p2_cell_delta)->publish_state(vmax - vmin);
+
+          p += 2;
+          float tmax = -273.0f;
+          std::string liste;
+          char buf[16];
+          for (int i = 0; i < ntemp; i++) {
+            float t = (h4(p + i * 4) - 2731) / 10.0f;
+            if (t > tmax) tmax = t;
+            snprintf(buf, sizeof(buf), "%.1f", t);
+            if (i > 0) liste += " / ";
+            liste += buf;
+          }
+          p += ntemp * 4;
+          id(p2_temp)->publish_state(tmax);
+          id(p2_temp_raw)->publish_state(liste);
+
+          float amps  = ((int16_t) h4(p)) / 10.0f;   p += 4;
+          float volts = h4(p) / 1000.0f;             p += 4;
+          float rem   = h4(p) / 100.0f;              p += 4;
+          p += 2;
+          float total = h4(p) / 100.0f;              p += 4;
+          int   cycl  = h4(p);
+
+          id(p2_current)->publish_state(amps);
+          id(p2_voltage)->publish_state(volts);
+          id(p2_power)->publish_state(volts * amps);
+          id(p2_remaining)->publish_state(rem);
+          id(p2_total)->publish_state(total);
+          id(p2_cycles)->publish_state(cycl);
+          if (total > 0.1f) id(p2_soc)->publish_state(rem / total * 100.0f);
+
+          if (amps > 0.05f)       id(p2_state)->publish_state("Charge");
+          else if (amps < -0.05f) id(p2_state)->publish_state("Decharge");
+          else                    id(p2_state)->publish_state("Repos");
+
+          ESP_LOGI("p2", "%d cell %d sondes | %.3f V | %.1f A | %.2f / %.2f Ah | %.1f %% | %.1f C | %d cycles",
+                   ncell, ntemp, volts, amps, rem, total,
+                   total > 0.1f ? rem / total * 100.0f : 0.0f, tmax, cycl);
+
+  # ---------------------------------------------------------------------------
+  # CID2=44 : alarmes. T2 a 0x02 est filtre ici AUSSI - et c'est justement
+  # parce que les DEUX packs portent ce meme drapeau, avec des firmwares
+  # differents (V1.0.1 cote maitre, V1.0.4 ici), que le champ est reconnu
+  # comme non implemente plutot que comme un defaut de sonde.
+  # Le raisonnement complet et les garde-fous sont dans dc-pack1.yaml.
+  # ---------------------------------------------------------------------------
+  - id: p2_alarm
+    mode: single
+    then:
+      - lambda: |-
+          uint8_t c;
+          while (id(uart_bms).available()) id(uart_bms).read_byte(&c);
+          id(uart_bms).write_str("~20024644E00202FD31\r");
+      - delay: 500ms
+      - lambda: |-
+          std::string resp;
+          uint8_t c;
+          while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
+
+          size_t soi = resp.find('~');
+          if (soi == std::string::npos || resp.size() < soi + 20) return;
+          std::string f = resp.substr(soi + 1);
+          while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
+          if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          std::string info = f.substr(12, f.size() - 16);
+          int len = (int) info.size();
+
+          auto h2 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 2).c_str(), nullptr, 16);
+          };
+
+          if (len < 6) return;
+          int ncell = h2(4);
+          if (ncell < 1 || ncell > 16) return;
+          int ptemp = 6 + ncell * 2;
+          if (ptemp + 2 > len) return;
+          int ntemp = h2(ptemp);
+          if (ntemp < 1 || ntemp > 8) return;
+          int attendu = 14 + ncell * 2 + ntemp * 2;
+          if (len < attendu) return;
+
+          std::string leve;
+          char b[8];
+          int p = 6;
+          for (int i = 0; i < ncell; i++) {
+            if (h2(p + i * 2) != 0) {
+              snprintf(b, sizeof(b), "C%02d ", i + 1);
+              leve += b;
+            }
+          }
+          p += ncell * 2 + 2;
+          for (int i = 0; i < ntemp; i++) {
+            int v = h2(p + i * 2);
+            if (v == 0) continue;
+            // Sonde 2 a 0x02 : constante non implementee, voir dc-pack1.yaml.
+            // Toute AUTRE valeur sur cette meme sonde ressort normalement.
+            if (i == 1 && v == 0x02) continue;
+            snprintf(b, sizeof(b), "T%d ", i + 1);
+            leve += b;
+          }
+          p += ntemp * 2;
+          if (h2(p) != 0)     leve += "ICHG ";
+          if (h2(p + 2) != 0) leve += "VMOD ";
+          if (h2(p + 4) != 0) leve += "IDSG ";
+
+          if (leve.empty()) leve = "OK";
+          else while (!leve.empty() && leve.back() == ' ') leve.pop_back();
+
+          id(p2_alarm_txt)->publish_state(leve);
+          id(p2_alarm_raw)->publish_state(info);
+
+  - id: p2_param
+    mode: single
+    then:
+      - lambda: |-
+          uint8_t c;
+          while (id(uart_bms).available()) id(uart_bms).read_byte(&c);
+          id(uart_bms).write_str("~20024647E00202FD2E\r");
+      - delay: 500ms
+      - lambda: |-
+          std::string resp;
+          uint8_t c;
+          while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
+
+          size_t soi = resp.find('~');
+          if (soi == std::string::npos || resp.size() < soi + 20) return;
+          std::string f = resp.substr(soi + 1);
+          while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
+          if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          std::string info = f.substr(12, f.size() - 16);
+          if (info.size() < 50) return;
+
+          auto h4 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 4).c_str(), nullptr, 16);
+          };
+
+          id(p2_cell_hi)->publish_state(h4(2) / 1000.0f);
+          id(p2_cell_lo)->publish_state(h4(6) / 1000.0f);
+          id(p2_cell_uv)->publish_state(h4(10) / 1000.0f);
+          id(p2_chg_tmax)->publish_state((h4(14) - 2731) / 10.0f);
+          id(p2_chg_tmin)->publish_state((h4(18) - 2731) / 10.0f);
+          id(p2_chg_imax)->publish_state(((int16_t) h4(22)) / 10.0f);
+          id(p2_mod_hi)->publish_state(h4(26) / 1000.0f);
+          id(p2_mod_lo)->publish_state(h4(30) / 1000.0f);
+          id(p2_mod_uv)->publish_state(h4(34) / 1000.0f);
+          id(p2_dsg_tmax)->publish_state((h4(38) - 2731) / 10.0f);
+          id(p2_dsg_tmin)->publish_state((h4(42) - 2731) / 10.0f);
+          id(p2_dsg_imax)->publish_state(((int16_t) h4(46)) / 10.0f);
+
+sensor:
+
+  - platform: template
+    name: "${upper_devicename} SOC Pack2"
+    id: p2_soc
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Tension Pack2"
+    id: p2_voltage
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Courant Pack2"
+    id: p2_current
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Puissance Pack2"
+    id: p2_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Temperature Pack2"
+    id: p2_temp
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Capacite restante Pack2"
+    id: p2_remaining
+    unit_of_measurement: "Ah"
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-medium
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Capacite totale Pack2"
+    id: p2_total
+    unit_of_measurement: "Ah"
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-high
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cycles Pack2"
+    id: p2_cycles
+    unit_of_measurement: "cycles"
+    state_class: total_increasing
+    accuracy_decimals: 0
+    icon: mdi:battery-sync
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule Max Pack2"
+    id: p2_cell_max
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule Min Pack2"
+    id: p2_cell_min
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Delta Cellules Pack2"
+    id: p2_cell_delta
+    unit_of_measurement: "mV"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:delta
+    update_interval: never
+
+  # --- Seuils de protection, diagnostic. Pas de state_class : constantes. ---
+
+  - platform: template
+    name: "${upper_devicename} Seuil cellule haute Pack2"
+    id: p2_cell_hi
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil cellule basse Pack2"
+    id: p2_cell_lo
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil cellule sous-tension Pack2"
+    id: p2_cell_uv
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Charge temperature min Pack2"
+    id: p2_chg_tmin
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Charge temperature max Pack2"
+    id: p2_chg_tmax
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Courant de charge max Pack2"
+    id: p2_chg_imax
+    unit_of_measurement: "A"
+    device_class: current
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil module tension haute Pack2"
+    id: p2_mod_hi
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil module tension basse Pack2"
+    id: p2_mod_lo
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil module sous-tension Pack2"
+    id: p2_mod_uv
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Decharge temperature min Pack2"
+    id: p2_dsg_tmin
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Decharge temperature max Pack2"
+    id: p2_dsg_tmax
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Courant de decharge max Pack2"
+    id: p2_dsg_imax
+    unit_of_measurement: "A"
+    device_class: current
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+text_sensor:
+
+  - platform: template
+    name: "${upper_devicename} Etat Pack2"
+    id: p2_state
+    icon: mdi:battery-clock
+    update_interval: never
+
+  # "OK", ou la liste de ce qui est leve. T2 a 0x02 est filtre - voir
+  # dc-pack1.yaml. Le champ brut ci-dessous n'est pas filtre.
+  - platform: template
+    name: "${upper_devicename} Alarmes Pack2"
+    id: p2_alarm_txt
+    icon: mdi:alert-circle-outline
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Alarmes brut Pack2"
+    id: p2_alarm_raw
+    icon: mdi:code-string
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Sondes temperature Pack2"
+    id: p2_temp_raw
+    icon: mdi:thermometer-lines
+    entity_category: diagnostic
+    update_interval: never

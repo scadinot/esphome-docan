@@ -1,0 +1,253 @@
+# =============================================================================
+# ESPHome - Docan DO-NOON, DEUX PACKS - PYLON sur RS485-A
+# Waveshare ESP32-S3-ETH
+# =============================================================================
+# HISTORIQUE DU NOM : ce fichier s'appelait docan-s3.yaml pendant la periode
+#   ou les deux montages coexistaient. Le D1 Mini a ete mis hors tension le
+#   26/08/2026 et sa configuration supprimee ; l'appareil a repris le nom
+#   "docan" tout court.
+#   Les noms d'ENTITES n'ont pas change (le prefixe etait deja "Docan") :
+#   aucune orpheline dans Home Assistant.
+#
+# NE JAMAIS RALLUMER LE D1 MINI : deux maitres PYLON ne cohabitent pas sur une
+#   meme paire RS485. Verifie a nos depens cote Growatt le 23/08.
+#
+# OU TROUVER QUOI
+#   packages/dc-pack1.yaml .... scripts et mesures du pack 1 (adresse 01)
+#   packages/dc-pack2.yaml .... idem pack 2 (adresse 02)
+#   packages/dc-cellules.yaml . les 32 tensions de cellules, 16 par pack
+#   packages/dc-systeme.yaml .. l'agregat des deux packs
+# =============================================================================
+# PROTOCOLE PYLON (ASCII, 9600 bps) - resume
+# ---------------------------------------------------------------------------
+# Trame : SOI '~' | VER | ADR | CID1 | CID2 | LENGTH | INFO | CHKSUM | EOI \r
+#   LENGTH = LCHKSUM(1) + LENID(3). LENID=0x002 -> somme des nibbles = 2,
+#   ~2+1 = 0xE, d'ou "E002". Sans champ INFO : "0000".
+#   CHKSUM = complement a deux de la somme des octets ASCII de VER a INFO.
+#
+# TRAMES UTILISEES
+#   Pack 1   ~20014642E00201FD35   analogique
+#            ~20014644E00201FD33   alarmes
+#            ~20014647E00201FD30   seuils
+#   Pack 2   ~20024642E00202FD33   analogique
+#            ~20024644E00202FD31   alarmes
+#            ~20024647E00202FD2E   seuils
+#
+# LE PACK 2 A MIS DU TEMPS A REPONDRE, et ce n'etait NI le cablage NI les DIP :
+#   son protocole RS485-A etait reste sur un autre dialecte. Le reglage du
+#   maitre NE SE PROPAGE PAS a l'esclave, il faut le poser sur SON ecran.
+#   Diagnostic utile : si le pack 1 repond et pas le pack 2, le bus est sain -
+#   une inversion A/B aurait fait tomber les deux.
+#
+# SURFACE EXPLOITABLE DU BMS - etablie par test, 24/08/2026
+#   42 analogique | 44 alarmes | 47 seuils | 51 versions ... REPONDENT
+#   4F | 83 | 92 | B0 ................................. MUETS
+#   Les quatre muets ont ete essayes DANS LES DEUX FORMES, avec INFO=01 et
+#   sans champ INFO. Comme le 51 repond sous la premiere forme, ce n'est ni un
+#   filtrage du mode PYLON ni un probleme de requete : ces services n'existent
+#   pas dans ce firmware. Question close.
+#   Consequence : pas d'historique des protections (83), pas de statistiques
+#   de capacite (B0), et les versions du 51 sont des champs VIDES - le
+#   desaccord de firmware maitre V1.0.1 / esclave V1.0.4 reste illisible sur
+#   le bus, il faut le relever sur l'ecran.
+#
+# CE BMS EST UN DAREN : le service 51 renvoie deux fois la chaine ASCII "DR",
+#   prefixe des modeles Daren (DR48100, DR-JC03...). Le depot
+#   github.com/cpttinkering/daren-485 est donc une reference de protocole
+#   applicable - c'est un pilote Python pour Venus OS, pas un composant
+#   ESPHome, il ne sert que de documentation.
+# =============================================================================
+# CE QUE LE BMS REMPLIT MAL - trois symptomes du meme mal
+# ---------------------------------------------------------------------------
+# 1. Les 5 sondes de temperature renvoient toutes LA MEME valeur.
+# 2. La trame analogique annonce 5 sondes, la trame d'alarme en annonce 4.
+# 3. L'octet d'alarme de la sonde 2 vaut 0x02 EN PERMANENCE - identique a
+#    deux jours d'intervalle, a travers une charge complete et un
+#    refroidissement, alors que le pack est a 23.6 C pour un seuil a 65 C.
+#    Ce n'est pas une surchauffe, c'est un champ non implemente.
+#
+# D'ou l'alarme qui NOMME ce qui est leve : une entite binaire aurait affiche
+# "Defaut" pour toujours, masquant la seule alarme qui compterait.
+# =============================================================================
+# CABLAGE - identique au montage Growatt, memes couleurs
+# ---------------------------------------------------------------------------
+# Le croisement est normal : le TXD du module EMET, il arrive donc sur la
+# broche de RECEPTION de l'ESP.
+#
+#   Module RS485          Fil      ESP32-S3
+#   VCC            --->   vert     3V3
+#   TXD            --->   bleu     IO16    (rx_pin)
+#   RXD            --->   violet   IO17    (tx_pin)
+#   GND            --->   blanc    GND
+#
+#   Module RS485          BMS, port RS485-A (RJ45), LES DEUX EN PARALLELE
+#   A+             --->   Pin 2 (Orange)
+#   B-             --->   Pin 1 (Blanc/Orange)
+#
+# NE PAS TOUCHER au RS485-B : c'est le lien de parallelisme entre les BMS.
+#
+# GPIO INTERDITS sur cette carte :
+#   IO13 IO11 IO12 IO14 IO10 IO9 ... W5500 Ethernet, cable en interne
+#   IO19 IO20 ................... USB natif, indispensable pour flasher
+#   IO43 IO44 ................... console UART0
+#   IO0 IO45 IO46 IO3 ........... strapping
+#   IO33 a IO37 ................. PSRAM en version octale
+# RESERVE POUR L'ECRAN : IO15, IO18, IO21 et la rangee haute.
+# =============================================================================
+# CONFIGURATION DES BMS (via l'ecran de CHAQUE pack)
+#   RS485-A  PYLON     9600 bps   monitoring ESP32
+#   RS485-B  inter-BMS 9600 bps   NE PAS TOUCHER
+#   CAN2     PYLON12   500 kbps   vers l'onduleur (Prog 36 = L52)
+#   Esclave : DIP1 ON, le reste OFF = adresse 2
+#
+#   Options RS485-A, toutes a 9600 : GROWATT-P | SRNE-P | GT-P | PYLON |
+#   DEYE | VOLT-2-P. Aucun mode natif constructeur, aucun 19200 bps.
+# =============================================================================
+
+substitutions:
+  device_name: "docan"
+  upper_devicename: "Docan"
+  ap_ssid: "Docan-Setup"
+
+packages:
+  pack1:    !include packages/dc-pack1.yaml
+  pack2:    !include packages/dc-pack2.yaml
+  cellules: !include packages/dc-cellules.yaml
+  systeme:  !include packages/dc-systeme.yaml
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${upper_devicename}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  ap:
+    ssid: ${ap_ssid}
+    password: !secret wifi_password
+
+captive_portal:
+
+web_server:
+  version: 3
+  port: 80
+
+time:
+  - platform: sntp
+    timezone: Europe/Paris
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_pass
+
+# WARN depuis le 26/08/2026, le portage etant valide.
+# CE QUI RESTE VISIBLE, et c'est l'essentiel :
+#   [W][p1] ou [W][p2] "analog : pas de reponse"  -> un pack ne repond plus
+#   [W][p1] ou [W][p2] "analog : RTN=xx"          -> le BMS refuse la commande
+#   [W][p2] "analog : INFO n caracteres, m attendus" -> trame tronquee
+# Ce qui disparait : la ligne de synthese par cycle et par pack. Repasser a
+# INFO pour la revoir, par exemple en cas de doute sur une valeur.
+logger:
+  level: WARN
+  hardware_uart: USB_SERIAL_JTAG
+
+# =============================================================================
+# ETAPE FINALE - ETHERNET (a n'activer qu'en TOUT DERNIER)
+# ESPHome n'accepte PAS wifi: et ethernet: simultanement. Supprimer le bloc
+# wifi ci-dessus, decommenter celui-ci, et flasher une derniere fois par le
+# WiFi. Si le lien ne monte pas, retour oblige a l'USB.
+#
+# ethernet:
+#   type: W5500
+#   clk_pin: GPIO13
+#   mosi_pin: GPIO11
+#   miso_pin: GPIO12
+#   cs_pin: GPIO14
+#   interrupt_pin: GPIO10
+#   reset_pin: GPIO9
+# =============================================================================
+
+uart:
+  id: uart_bms
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+globals:
+  # Les seuils sont des constantes de configuration : interroges une fois sur
+  # 20 (10 min), et des le premier cycle.
+  - id: cycle_count
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+# =============================================================================
+# ORDONNANCEMENT
+# ---------------------------------------------------------------------------
+# Le bus est partage : les scripts sont serialises par script.wait, jamais
+# lances en parallele. Quatre trames par cycle (2 packs x analogique+alarmes),
+# plus les seuils une fois sur 20. A ~800 ms par echange, cela occupe environ
+# 4 s sur les 30 - le reste est de la marge.
+# =============================================================================
+interval:
+  - interval: 30s
+    then:
+      - script.execute: p1_analog
+      - script.wait: p1_analog
+      - delay: 300ms
+      - script.execute: p1_alarm
+      - script.wait: p1_alarm
+      - delay: 300ms
+      - script.execute: p2_analog
+      - script.wait: p2_analog
+      - delay: 300ms
+      - script.execute: p2_alarm
+      - script.wait: p2_alarm
+      - lambda: id(cycle_count) += 1;
+      - if:
+          condition:
+            lambda: 'return id(cycle_count) % 20 == 1;'
+          then:
+            - delay: 300ms
+            - script.execute: p1_param
+            - script.wait: p1_param
+            - delay: 300ms
+            - script.execute: p2_param
+
+sensor:
+  - platform: wifi_signal
+    name: "${upper_devicename} WiFi Signal"
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "${upper_devicename} Uptime"
+    unit_of_measurement: "h"
+    accuracy_decimals: 2
+    entity_category: diagnostic
+    filters:
+      - lambda: return x / 3600.0;
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "${upper_devicename} IP"
+      entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "${upper_devicename} Restart"
+    entity_category: config

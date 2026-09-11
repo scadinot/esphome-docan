@@ -1,0 +1,526 @@
+# =============================================================================
+# PACK 1 - adresse PYLON 01 (BMS maitre)
+# =============================================================================
+# PAQUET inclus par docan.yaml. Ne se compile pas seul.
+# Les 16 cellules sont dans dc-cellules.yaml, les valeurs calculees dans
+# dc-systeme.yaml.
+#
+# CONVENTION : qualificatif en SUFFIXE - "SOC Pack1" et non "Pack1 SOC".
+#   Home Assistant classant par ordre alphabetique, les trois versions d'une
+#   meme grandeur se retrouvent cote a cote : Pack1 < Pack2 < Systeme.
+#   Meme principe que les suffixes Ond1 / Ond2 du montage Growatt.
+#
+# VALIDATION : chaque parseur verifie que la trame contient TOUS les octets
+# attendus AVANT de publier. Une reponse tronquee ferait lire des champs hors
+# limites, donc des zeros, et HA enregistrerait une capacite ou un SOC nuls.
+# Une fausse mesure est pire que pas de mesure.
+# Les offsets sont derives de ncell et ntemp, JAMAIS codes en dur : c'est un
+# offset fixe errone qui avait tout casse dans la v8 du montage D1 Mini.
+#
+# CID2=42, champ INFO :
+#   0 dataflag(2) | 2 pack(2) | 4 nb_cellules(2) | 6 cellules 4 x ncell (mV)
+#   puis nb_temp(2) | temperatures 4 x ntemp (0.1 K, (raw-2731)/10 = C)
+#   puis courant(4, signe, 0.1 A) | tension(4, mV) | restant(4, 0.01 Ah)
+#   | user(2) | total(4, 0.01 Ah) | cycles(4)
+#   Longueur attendue = 30 + 4 x ncell + 4 x ntemp
+#
+# UNITE DU COURANT : 0.1 A et non les 10 mA du standard Pylontech. Etabli par
+#   derivation du compteur d'ampere-heures, recoupe par l'ecran, confirme par
+#   les limites +/-205 A du CID2=47.
+# =============================================================================
+
+script:
+
+  - id: p1_analog
+    mode: single
+    then:
+      - lambda: |-
+          uint8_t c;
+          while (id(uart_bms).available()) id(uart_bms).read_byte(&c);
+          id(uart_bms).write_str("~20014642E00201FD35\r");
+      - delay: 500ms
+      - lambda: |-
+          std::string resp;
+          uint8_t c;
+          while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
+
+          size_t soi = resp.find('~');
+          if (soi == std::string::npos || resp.size() < soi + 20) {
+            ESP_LOGW("p1", "analog : pas de reponse (%d octets)", (int) resp.size());
+            return;
+          }
+          std::string f = resp.substr(soi + 1);
+          while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
+          if (f.size() < 16) return;
+          if (f.compare(6, 2, "00") != 0) {
+            ESP_LOGW("p1", "analog : RTN=%s", f.substr(6, 2).c_str());
+            return;
+          }
+          std::string info = f.substr(12, f.size() - 16);
+          int len = (int) info.size();
+
+          auto h2 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 2).c_str(), nullptr, 16);
+          };
+          auto h4 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 4).c_str(), nullptr, 16);
+          };
+
+          if (len < 6) return;
+          int ncell = h2(4);
+          if (ncell < 1 || ncell > 16) return;
+          int ptemp = 6 + ncell * 4;
+          if (ptemp + 2 > len) return;
+          int ntemp = h2(ptemp);
+          if (ntemp < 1 || ntemp > 8) return;
+          int attendu = 30 + ncell * 4 + ntemp * 4;
+          if (len < attendu) {
+            ESP_LOGW("p1", "analog : INFO %d caracteres, %d attendus", len, attendu);
+            return;
+          }
+
+          int p = 6;
+          sensor::Sensor *cells[16] = {
+            id(p1c01), id(p1c02), id(p1c03), id(p1c04), id(p1c05), id(p1c06),
+            id(p1c07), id(p1c08), id(p1c09), id(p1c10), id(p1c11), id(p1c12),
+            id(p1c13), id(p1c14), id(p1c15), id(p1c16)
+          };
+          int vmin = 99999, vmax = 0;
+          for (int i = 0; i < ncell; i++) {
+            int mv = h4(p + i * 4);
+            cells[i]->publish_state(mv / 1000.0f);
+            if (mv < vmin) vmin = mv;
+            if (mv > vmax) vmax = mv;
+          }
+          p += ncell * 4;
+          id(p1_cell_min)->publish_state(vmin / 1000.0f);
+          id(p1_cell_max)->publish_state(vmax / 1000.0f);
+          id(p1_cell_delta)->publish_state(vmax - vmin);
+
+          // Le BMS annonce 5 sondes mais renvoie 5 fois la meme valeur. On
+          // publie la plus elevee - la seule qui compte pour la securite - et
+          // la liste brute en diagnostic, au cas ou elles se differencient.
+          p += 2;
+          float tmax = -273.0f;
+          std::string liste;
+          char buf[16];
+          for (int i = 0; i < ntemp; i++) {
+            float t = (h4(p + i * 4) - 2731) / 10.0f;
+            if (t > tmax) tmax = t;
+            snprintf(buf, sizeof(buf), "%.1f", t);
+            if (i > 0) liste += " / ";
+            liste += buf;
+          }
+          p += ntemp * 4;
+          id(p1_temp)->publish_state(tmax);
+          id(p1_temp_raw)->publish_state(liste);
+
+          float amps  = ((int16_t) h4(p)) / 10.0f;   p += 4;
+          float volts = h4(p) / 1000.0f;             p += 4;
+          float rem   = h4(p) / 100.0f;              p += 4;
+          p += 2;
+          float total = h4(p) / 100.0f;              p += 4;
+          int   cycl  = h4(p);
+
+          id(p1_current)->publish_state(amps);
+          id(p1_voltage)->publish_state(volts);
+          id(p1_power)->publish_state(volts * amps);
+          id(p1_remaining)->publish_state(rem);
+          id(p1_total)->publish_state(total);
+          id(p1_cycles)->publish_state(cycl);
+          if (total > 0.1f) id(p1_soc)->publish_state(rem / total * 100.0f);
+
+          if (amps > 0.05f)       id(p1_state)->publish_state("Charge");
+          else if (amps < -0.05f) id(p1_state)->publish_state("Decharge");
+          else                    id(p1_state)->publish_state("Repos");
+
+          ESP_LOGI("p1", "%d cell %d sondes | %.3f V | %.1f A | %.2f / %.2f Ah | %.1f %% | %.1f C | %d cycles",
+                   ncell, ntemp, volts, amps, rem, total,
+                   total > 0.1f ? rem / total * 100.0f : 0.0f, tmax, cycl);
+
+  # ===========================================================================
+  # CID2=44 : alarmes. L'entite NOMME ce qui est leve.
+  # ---------------------------------------------------------------------------
+  # Codes : C01..C16 cellules | T1..T8 sondes | ICHG courant de charge
+  #         VMOD tension module | IDSG courant de decharge
+  #
+  # T2 EST FILTRE - decision du 26/08/2026, et voici pourquoi.
+  #   L'octet d'alarme de la sonde 2 vaut 0x02 EN PERMANENCE. Constate sur les
+  #   DEUX packs, dont les BMS ont des firmwares differents (V1.0.1 et
+  #   V1.0.4), a 23 C pour un seuil a 65 C, identique a deux jours d'intervalle
+  #   et a travers une charge complete. Ce n'est pas une surchauffe : c'est un
+  #   champ que le protocole Docan ne remplit pas.
+  #
+  #   POURQUOI FILTRER PLUTOT QUE L'AFFICHER : une alarme qui ne dit jamais
+  #   "OK" est inutilisable. On ne peut ni l'automatiser, ni en faire une
+  #   pastille de tableau de bord. Le bruit de fond neutralise l'entite.
+  #
+  #   CE QUI EST FILTRE, PRECISEMENT : la sonde 2 ET la valeur exacte 0x02.
+  #   Si cet octet prenait 0x01 (sous le seuil bas) ou 0xF0 (autre defaut), il
+  #   ressortirait normalement. On ignore une constante connue, pas une sonde.
+  #
+  #   CE QUI N'EST PAS PERDU : les cinq sondes renvoyant la meme valeur, une
+  #   vraie surchauffe leverait T1, T3 et T4 en meme temps. Et le champ brut
+  #   reste integralement visible dans "Alarmes brut Pack1".
+  #
+  # Les 5 octets d'etat qui suivent ne sont PAS testes : ils portent des
+  # drapeaux de fonctionnement normal (MOS actifs, equilibrage) et valaient
+  # 0E / 40 au repos, donc non nuls sans anomalie.
+  # ===========================================================================
+  - id: p1_alarm
+    mode: single
+    then:
+      - lambda: |-
+          uint8_t c;
+          while (id(uart_bms).available()) id(uart_bms).read_byte(&c);
+          id(uart_bms).write_str("~20014644E00201FD33\r");
+      - delay: 500ms
+      - lambda: |-
+          std::string resp;
+          uint8_t c;
+          while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
+
+          size_t soi = resp.find('~');
+          if (soi == std::string::npos || resp.size() < soi + 20) return;
+          std::string f = resp.substr(soi + 1);
+          while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
+          if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          std::string info = f.substr(12, f.size() - 16);
+          int len = (int) info.size();
+
+          auto h2 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 2).c_str(), nullptr, 16);
+          };
+
+          if (len < 6) return;
+          int ncell = h2(4);
+          if (ncell < 1 || ncell > 16) return;
+          int ptemp = 6 + ncell * 2;
+          if (ptemp + 2 > len) return;
+          int ntemp = h2(ptemp);
+          if (ntemp < 1 || ntemp > 8) return;
+          int attendu = 14 + ncell * 2 + ntemp * 2;
+          if (len < attendu) return;
+
+          std::string leve;
+          char b[8];
+          int p = 6;
+          for (int i = 0; i < ncell; i++) {
+            if (h2(p + i * 2) != 0) {
+              snprintf(b, sizeof(b), "C%02d ", i + 1);
+              leve += b;
+            }
+          }
+          p += ncell * 2 + 2;
+          for (int i = 0; i < ntemp; i++) {
+            int v = h2(p + i * 2);
+            if (v == 0) continue;
+            // Sonde 2 a 0x02 : constante non implementee, voir l'encadre.
+            // Toute AUTRE valeur sur cette meme sonde ressort normalement.
+            if (i == 1 && v == 0x02) continue;
+            snprintf(b, sizeof(b), "T%d ", i + 1);
+            leve += b;
+          }
+          p += ntemp * 2;
+          if (h2(p) != 0)     leve += "ICHG ";
+          if (h2(p + 2) != 0) leve += "VMOD ";
+          if (h2(p + 4) != 0) leve += "IDSG ";
+
+          if (leve.empty()) leve = "OK";
+          else while (!leve.empty() && leve.back() == ' ') leve.pop_back();
+
+          id(p1_alarm_txt)->publish_state(leve);
+          id(p1_alarm_raw)->publish_state(info);
+
+  # ---------------------------------------------------------------------------
+  # CID2=47 : seuils de protection. Constantes de configuration.
+  #
+  # ETIQUETTES A VERIFIER : les valeurs relevees sont cellule 3.650 / 3.580 /
+  #   2.800 V et module 57.000 / 44.800 / 43.200 V. Une cellule LiFePO4 dont le
+  #   seuil "bas" serait a 3.580 V n'a aucun sens - c'est une tension de fin de
+  #   charge. Le second champ est vraisemblablement le RETOUR d'hysteresis de
+  #   la limite haute. NON VERIFIE.
+  # A RETENIR : la charge est bloquee sous 5 C. En local non chauffe, cela
+  #   explique les matinees d'hiver ou l'onduleur ne peut pas charger.
+  # ---------------------------------------------------------------------------
+  - id: p1_param
+    mode: single
+    then:
+      - lambda: |-
+          uint8_t c;
+          while (id(uart_bms).available()) id(uart_bms).read_byte(&c);
+          id(uart_bms).write_str("~20014647E00201FD30\r");
+      - delay: 500ms
+      - lambda: |-
+          std::string resp;
+          uint8_t c;
+          while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
+
+          size_t soi = resp.find('~');
+          if (soi == std::string::npos || resp.size() < soi + 20) return;
+          std::string f = resp.substr(soi + 1);
+          while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
+          if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          std::string info = f.substr(12, f.size() - 16);
+          if (info.size() < 50) return;
+
+          auto h4 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 4).c_str(), nullptr, 16);
+          };
+
+          id(p1_cell_hi)->publish_state(h4(2) / 1000.0f);
+          id(p1_cell_lo)->publish_state(h4(6) / 1000.0f);
+          id(p1_cell_uv)->publish_state(h4(10) / 1000.0f);
+          id(p1_chg_tmax)->publish_state((h4(14) - 2731) / 10.0f);
+          id(p1_chg_tmin)->publish_state((h4(18) - 2731) / 10.0f);
+          id(p1_chg_imax)->publish_state(((int16_t) h4(22)) / 10.0f);
+          id(p1_mod_hi)->publish_state(h4(26) / 1000.0f);
+          id(p1_mod_lo)->publish_state(h4(30) / 1000.0f);
+          id(p1_mod_uv)->publish_state(h4(34) / 1000.0f);
+          id(p1_dsg_tmax)->publish_state((h4(38) - 2731) / 10.0f);
+          id(p1_dsg_tmin)->publish_state((h4(42) - 2731) / 10.0f);
+          id(p1_dsg_imax)->publish_state(((int16_t) h4(46)) / 10.0f);
+
+sensor:
+
+  - platform: template
+    name: "${upper_devicename} SOC Pack1"
+    id: p1_soc
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Tension Pack1"
+    id: p1_voltage
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Courant Pack1"
+    id: p1_current
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Puissance Pack1"
+    id: p1_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Temperature Pack1"
+    id: p1_temp
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Capacite restante Pack1"
+    id: p1_remaining
+    unit_of_measurement: "Ah"
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-medium
+    update_interval: never
+
+  # Capacite apprise par le BMS. C'est ELLE qui remplace le SOH, non expose
+  # par ce protocole : sa derive lente au fil des annees est la vraie mesure
+  # d'usure de la batterie.
+  - platform: template
+    name: "${upper_devicename} Capacite totale Pack1"
+    id: p1_total
+    unit_of_measurement: "Ah"
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-high
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cycles Pack1"
+    id: p1_cycles
+    unit_of_measurement: "cycles"
+    state_class: total_increasing
+    accuracy_decimals: 0
+    icon: mdi:battery-sync
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule Max Pack1"
+    id: p1_cell_max
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Cellule Min Pack1"
+    id: p1_cell_min
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Delta Cellules Pack1"
+    id: p1_cell_delta
+    unit_of_measurement: "mV"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:delta
+    update_interval: never
+
+  # --- Seuils de protection, diagnostic. Pas de state_class : constantes. ---
+
+  - platform: template
+    name: "${upper_devicename} Seuil cellule haute Pack1"
+    id: p1_cell_hi
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil cellule basse Pack1"
+    id: p1_cell_lo
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil cellule sous-tension Pack1"
+    id: p1_cell_uv
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Charge temperature min Pack1"
+    id: p1_chg_tmin
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Charge temperature max Pack1"
+    id: p1_chg_tmax
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Courant de charge max Pack1"
+    id: p1_chg_imax
+    unit_of_measurement: "A"
+    device_class: current
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil module tension haute Pack1"
+    id: p1_mod_hi
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil module tension basse Pack1"
+    id: p1_mod_lo
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Seuil module sous-tension Pack1"
+    id: p1_mod_uv
+    unit_of_measurement: "V"
+    device_class: voltage
+    accuracy_decimals: 3
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Decharge temperature min Pack1"
+    id: p1_dsg_tmin
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Decharge temperature max Pack1"
+    id: p1_dsg_tmax
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Courant de decharge max Pack1"
+    id: p1_dsg_imax
+    unit_of_measurement: "A"
+    device_class: current
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: never
+
+text_sensor:
+
+  - platform: template
+    name: "${upper_devicename} Etat Pack1"
+    id: p1_state
+    icon: mdi:battery-clock
+    update_interval: never
+
+  # "OK", ou la liste de ce qui est leve. T2 a 0x02 est filtre - voir
+  # l'encadre du script p1_alarm. Le champ brut ci-dessous n'est pas filtre.
+  - platform: template
+    name: "${upper_devicename} Alarmes Pack1"
+    id: p1_alarm_txt
+    icon: mdi:alert-circle-outline
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Alarmes brut Pack1"
+    id: p1_alarm_raw
+    icon: mdi:code-string
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Sondes temperature Pack1"
+    id: p1_temp_raw
+    icon: mdi:thermometer-lines
+    entity_category: diagnostic
+    update_interval: never
