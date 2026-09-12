@@ -178,6 +178,36 @@ d'asymétrie de câblage ; les croisements de courbes sur plusieurs jours sont l
 terme d'écart de tension à vide, qui dérive avec les SOC — un câblage, fixe, ne
 peut pas les produire.
 
+## Première charge complète instrumentée — 12/09/2026
+
+De 11:05 à 18:08, de 18 à 100 %, courant monté par paliers jusqu'à 120 A
+système. Les deux compteurs ont touché le plein — c'est ce qui les
+**recalibre**, un BMS n'intègre que des ampères-heures :
+
+| | Pack 1 | Pack 2 |
+|---|---|---|
+| Restant / total | 325,24 / 325,87 Ah | 324,99 / 325,0 Ah |
+| SOC | 99,8 % | 100,0 % |
+| Température (départ 20,4 °C) | 30,3 °C | 30,8 °C |
+
+**L'offset de tension est confirmé constant.** −51 mV à 54,44 V contre −52 mV
+à 51,44 V le matin : trois volts plus haut, un millivolt d'écart. Ce n'est donc
+pas un défaut de gain d'ADC. Ajouter **+0,051 V** à toute lecture de
+`Ecart tension packs`. Lequel des deux BMS a raison reste inconnu — seul un
+voltmètre sur la barre le dirait.
+
+**Le delta cellules monte en fin de charge** : 8 mV à 35 % de SOC, **46 à
+54 mV à 100 %**. Ce n'est pas une dégradation, c'est la courbe du LiFePO4 qui
+se redresse au-dessus de 95 %. Mais l'équilibrage n'a probablement pas
+travaillé : la cellule la plus haute a plafonné à 3,410 V (pack 1) et 3,418 V
+(pack 2), la charge s'étant terminée sur la **tension de pack** (54,4 V,
+consigne H35) et non sur une cellule. Ces BMS n'activent leurs résistances
+qu'au-delà de 3,4–3,45 V par cellule.
+
+À retenir : **terminer une charge à petit courant** (10–20 A système sur la
+dernière heure) pour laisser l'équilibrage rattraper le delta. À vérifier au
+prochain cycle.
+
 ## Le compteur de cycles ne compte pas des cycles
 
 Il s'incrémente en **ampères-heures cumulés**, pas en charges complètes

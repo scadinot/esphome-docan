@@ -152,6 +152,9 @@ script:
           id(p2_cell_max)->publish_state(vmax / 1000.0f);
           id(p2_cell_delta)->publish_state(vmax - vmin);
 
+          // Cinq sondes, une seule valeur : trame PYLON mal remplie, le BMS
+          // en expose six distinctes sur son ecran (4 cellules, MOS, ENV).
+          // Le raisonnement et les chiffres sont dans dc-pack1.yaml.
           p += 2;
           float tmax = -273.0f;
           std::string liste;

@@ -174,6 +174,49 @@
 #   cablage - et non dans le circuit. Dossier cablage clos. Le detail est dans
 #   le README.
 #
+# =============================================================================
+# CE QU'A MONTRE LA PREMIERE CHARGE COMPLETE INSTRUMENTEE - 12/09/2026
+# ---------------------------------------------------------------------------
+# De 11:05 a 18:08, de 18 % a 100 %, courant monte par paliers jusqu'a 120 A
+# systeme. Les deux compteurs de SOC ont atteint leur pleine capacite :
+#   Pack 1  325.24 / 325.87 Ah   99.8 %
+#   Pack 2  324.99 / 325.0  Ah  100.0 %
+# C'est cette fin de charge qui RECALIBRE les compteurs - un BMS n'integre que
+# des ampere-heures, il ne se recale qu'en touchant le plein. La question du
+# pack 2 annonce moins plein que sa tension a vide ne le suggerait est donc
+# refermee : les deux comptent juste.
+#
+# LE DELTA CELLULES MONTE EN FIN DE CHARGE, et il faut le savoir :
+#   8 mV a 35 % de SOC  ->  46 a 54 mV a 100 %
+# Six fois plus. Ce n'est pas une degradation : c'est la courbe de tension du
+# LiFePO4 qui se redresse au-dessus de 95 %, ou quelques milliampere-heures
+# d'ecart entre cellules deviennent des dizaines de millivolts.
+#
+#   MAIS L'EQUILIBRAGE N'A PROBABLEMENT PAS TRAVAILLE. La cellule la plus
+#   haute a plafonne a 3.410 V (pack 1) et 3.418 V (pack 2) - la charge s'est
+#   terminee sur la TENSION DE PACK (54.4 V, consigne H35 de l'onduleur), pas
+#   sur une cellule individuelle. Or ces BMS n'activent leurs resistances
+#   d'equilibrage qu'au-dela de 3.4-3.45 V par cellule. On est reste au seuil.
+#
+#   CONSEQUENCE PRATIQUE : pour laisser l'equilibrage rattraper le delta, il
+#   faut terminer une charge A PETIT COURANT - 10 a 20 A systeme sur la
+#   derniere heure - et non a 120 A. La tension de pack monte alors moins vite
+#   que les cellules ne s'egalisent. A verifier au prochain cycle complet.
+#
+# CE QU'IL FAUT SURVEILLER : le delta AU REPOS, une heure apres la fin de
+#   charge. S'il retombe sous 20 mV, c'etait de la polarisation et tout va
+#   bien. S'il reste vers 50 mV, c'est un vrai desequilibre de charge entre
+#   cellules, et il faudra la charge lente ci-dessus pour le resorber.
+#
+# TEMPERATURES : 20.4 C au depart, 30.8 C a l'arrivee apres sept heures dont
+#   deux a 60 A par pack. Seuil de coupure a 65 C, jamais approche.
+#   ATTENTION, la sonde lue ici n'est PAS la plus chaude : l'ecran du BMS
+#   expose SIX temperatures (4 cellules, MOS, ENV) et le MOS tournait 6 C
+#   au-dessus des cellules a 58 A. Le protocole PYLON, lui, renvoie cinq fois
+#   la MEME valeur - celle des cellules. Le point chaud reel n'est donc pas
+#   visible depuis Home Assistant. Voir l'en-tete de dc-pack1.yaml.
+# =============================================================================
+#
 # ET SI C'EST LE SHUNT QUI MENT : la pince amperemetrique sur le cable negatif
 #   du pack 2 reste le juge de paix. Si elle lit le meme courant que le pack 1
 #   alors que le BMS en annonce moins, c'est la MESURE qui est fausse et non
@@ -371,9 +414,13 @@ sensor:
   #   dira. En attendant, toute lecture se corrige de +0.052 V avant d'etre
   #   interpretee.
   #
-  #   NON VERIFIE : que l'offset soit constant en tension. Un defaut de GAIN
-  #   d'ADC se verrait differemment a 51 V et a 57 V. Prochain point de
-  #   mesure : la fin de charge, au repos, vers 57 V.
+  #   VERIFIE LE 12/09/2026 A 18:09, en fin de charge : -51 mV a 54.44 V,
+  #   contre -52 mV a 51.44 V le matin. Trois volts plus haut, un millivolt de
+  #   difference. C'est donc un OFFSET CONSTANT et non un defaut de gain
+  #   d'ADC, qui se serait creuse avec la tension. La correction est une
+  #   soustraction unique : ajouter +0.051 V a toute lecture de cette entite.
+  #   Reste inconnu : lequel des deux BMS a raison. Un voltmetre sur la barre
+  #   le dirait ; sans lui on sait seulement qu'ils different de 51 mV.
   #
   # Une fois l'offset retire, AU REPOS c'est l'ecart de tension a vide,
   # OCV1 - OCV2 : le terme constant de la grille en tete de fichier. Sous

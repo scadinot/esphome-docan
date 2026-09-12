@@ -177,9 +177,23 @@ script:
           id(p1_cell_max)->publish_state(vmax / 1000.0f);
           id(p1_cell_delta)->publish_state(vmax - vmin);
 
-          // Le BMS annonce 5 sondes mais renvoie 5 fois la meme valeur. On
-          // publie la plus elevee - la seule qui compte pour la securite - et
-          // la liste brute en diagnostic, au cas ou elles se differencient.
+          // Le BMS annonce 5 sondes et renvoie 5 fois LA MEME VALEUR. On
+          // publie la plus elevee et la liste brute en diagnostic, au cas ou
+          // elles se differencient un jour.
+          //
+          // CE N'EST PAS UNE BATTERIE A UNE SEULE SONDE - constate le
+          // 12/09/2026 sur l'ecran du pack. Le BMS en expose SIX, distinctes :
+          //   Cell 1  Cell 2  Cell 3  Cell 4  MOS  ENV
+          //     23      23      22      22     29   27      (a 58 A)
+          // C'est la trame PYLON qui est mal remplie - une valeur recopiee
+          // cinq fois - comme le champ d'alarme T2 et comme le /10 du maitre.
+          // Meme classe de defaut de firmware.
+          //
+          // CONSEQUENCE : la temperature remontee ici est celle des CELLULES.
+          // Le MOSFET, qui est le point chaud, tournait 6 C au-dessus a 58 A
+          // et reste invisible depuis Home Assistant. Le seuil de coupure a
+          // 65 C laisse une marge enorme, mais on ne voit pas l'element qui
+          // s'en approcherait le premier. Seul l'ecran du pack le montre.
           p += 2;
           float tmax = -273.0f;
           std::string liste;
