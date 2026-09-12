@@ -165,6 +165,7 @@ courant lu sur les BMS et les onduleurs à l'heure de chaque lecture) :
 | Pack 2 → barre | 45 mV | 45 mV | 1,12 mΩ |
 | Barre → Ond1 | 40 mV | 40 mV | 1,00 mΩ |
 | Barre → Ond2 | 44 mV | 45 mV | 1,11 mΩ |
+| Plot du pack → cosse (le boulon), à 60 A | < 2 mV | < 2 mV | < 0,03 mΩ |
 
 Les deux branches batterie sont **identiques à 0,3 %** — 2,2 mΩ chacune, dont
 1,2 pour la paire de pôles du disjoncteur. Les 5 % de la pente ne sont donc pas
