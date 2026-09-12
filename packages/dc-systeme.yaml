@@ -159,6 +159,21 @@
 #   alors que le pack 2 est annonce MOINS plein - l'un des deux compteurs de
 #   SOC derive. La droite a cinq ou six courants differents tranchera.
 #
+# LA DROITE A ETE TRACEE LE 12/09/2026 APRES-MIDI, et le millivoltmetre a
+#   suivi. Quatre paliers de consigne AC1, moyennes sur les trois dernieres
+#   minutes de chaque palier, jamais une lecture isolee :
+#     20 A systeme  +0.4 A    40 A  +0.45 A    60 A  -0.6 A    80 A  -1.0 A
+#   Pente -0.025 A/A, ordonnee +1.1 A. Soit R1 = 1.05 x R2, et OCV1 < OCV2.
+#   Le quatrieme point est tombe sur la droite predite par les trois premiers.
+#
+#   PUIS LE MULTIMETRE, a 40 A par branche : huit poles de disjoncteur a
+#   0.60 mOhm (+/-2 %), borne -> barre 1.11 mOhm pack 1 et 1.12 mOhm pack 2 par
+#   polarite, barre -> onduleur 1.00 (Ond1) et 1.11 (Ond2). Les deux branches
+#   batterie sont IDENTIQUES a 0.3 %. Les 5 % de la pente sont donc dans les
+#   packs - resistance interne, 10 a 20 mOhm chacun, contre 2.2 mOhm de
+#   cablage - et non dans le circuit. Dossier cablage clos. Le detail est dans
+#   le README.
+#
 # ET SI C'EST LE SHUNT QUI MENT : la pince amperemetrique sur le cable negatif
 #   du pack 2 reste le juge de paix. Si elle lit le meme courant que le pack 1
 #   alors que le BMS en annonce moins, c'est la MESURE qui est fausse et non

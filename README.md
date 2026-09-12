@@ -136,6 +136,47 @@ lisent pas pareil sur le même nœud ; le pack 2 affiche ~52 mV de plus. À
 retrancher avant toute interprétation. Non vérifié : que l'offset soit
 constant en tension — à relever de nouveau au repos vers 57 V.
 
+## Le câblage est mesuré et innocenté — 12/09/2026
+
+Une semaine de questions sur un disjoncteur défectueux ou une asymétrie de
+câblage entre les deux batteries, réglée en une heure de charge à 40 A.
+
+**La droite, d'abord.** Quatre paliers de consigne AC1 (10 / 20 / 30 / 40 A par
+onduleur), `I1 − I2` moyenné sur les trois dernières minutes de chaque palier —
+jamais une lecture isolée, la dispersion d'un échantillon est de ±0,5 A :
+
+| I système | I1 − I2 |
+|---|---|
+| 20 A | +0,4 A |
+| 40 A | +0,45 A |
+| 60 A | −0,6 A |
+| 80 A | −1,0 A |
+
+Pente −0,025 A/A → R1 = 1,05 × R2. Ordonnée +1,1 A → OCV1 < OCV2. Le
+quatrième point est tombé sur la droite prédite par les trois premiers.
+
+**Le millivoltmètre ensuite**, à ~40 A dans chaque branche (`R = ΔV / I`, le
+courant lu sur les BMS et les onduleurs à l'heure de chaque lecture) :
+
+| Branche | ΔV (+) | ΔV (−) | R par polarité |
+|---|---|---|---|
+| Disjoncteurs, 8 pôles | 24 mV | 24 mV (un à 25) | 0,60 mΩ |
+| Pack 1 → barre | 44 mV | 44 mV | 1,11 mΩ |
+| Pack 2 → barre | 45 mV | 45 mV | 1,12 mΩ |
+| Barre → Ond1 | 40 mV | 40 mV | 1,00 mΩ |
+| Barre → Ond2 | 44 mV | 45 mV | 1,11 mΩ |
+
+Les deux branches batterie sont **identiques à 0,3 %** — 2,2 mΩ chacune, dont
+1,2 pour la paire de pôles du disjoncteur. Les 5 % de la pente ne sont donc pas
+dans le circuit : avec 10 à 20 mΩ de résistance interne par pack contre 2,2 mΩ
+de câblage, ils correspondent à 0,5–1 mΩ d'écart interne entre deux lots de
+cellules. Rien à resserrer, rien à changer.
+
+Ce que ça referme : pas de disjoncteur défectueux (huit pôles à ±2 %) ; pas
+d'asymétrie de câblage ; les croisements de courbes sur plusieurs jours sont le
+terme d'écart de tension à vide, qui dérive avec les SOC — un câblage, fixe, ne
+peut pas les produire.
+
 ## Le compteur de cycles ne compte pas des cycles
 
 Il s'incrémente en **ampères-heures cumulés**, pas en charges complètes
