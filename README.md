@@ -129,6 +129,13 @@ rapproche de 50 %. Un partage qui « s'améliore » à 40 A n'a rien prouvé.
 Sans tracer de droite : un **échelon** de courant. Sur quelques secondes l'OCV
 ne bouge pas, le terme constant s'annule, et `dI1 x R1 = dI2 x R2`.
 
+**`Ecart tension packs` porte un offset de mesure de −52 mV**, établi le
+12/09/2026 : à 0,0 A sur les deux packs, en parallèle sur la barre, donc au
+même potentiel, l'entité lisait −47 à −58 mV toute une nuit. Les deux BMS ne
+lisent pas pareil sur le même nœud ; le pack 2 affiche ~52 mV de plus. À
+retrancher avant toute interprétation. Non vérifié : que l'offset soit
+constant en tension — à relever de nouveau au repos vers 57 V.
+
 ## Le compteur de cycles ne compte pas des cycles
 
 Il s'incrémente en **ampères-heures cumulés**, pas en charges complètes

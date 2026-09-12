@@ -142,6 +142,23 @@
 #   les points doivent etre releves dans une meme session, pas etales sur des
 #   jours - sinon la derive de l'OCV se reinvite dans la pente.
 #
+# FERMER LE SYSTEME : trois observables, trois inconnues.
+#   L'ordonnee a l'origine vaut -2 x (OCV1 - OCV2)/(R1 + R2), et OCV1 - OCV2
+#   se lit directement sur "Ecart tension packs" AU REPOS, une fois son offset
+#   de mesure retire - voir l'entite, -52 mV etabli le 12/09/2026. D'ou
+#   R1 + R2. La pente donne alors R2 - R1, et les deux resistances de chemin
+#   sortent separement. Meme session pour les trois, sinon la derive d'OCV
+#   brouille tout.
+#
+#   PREMIERS INDICES, releves au demarrage de la charge du 12/09 a 11:09 -
+#   deux points seulement, echantillons a 30 s, a prendre pour ce qu'ils sont :
+#     repos   I1 = -0.6   I2 = -1.4   le pack 2 DONNE plus
+#     charge  I1 = 11.1   I2 =  8.8   le pack 2 RECOIT moins
+#   C'est la signature des deux termes : le constant domine au repos, la
+#   pente sous charge. Estimation grossiere : R2/R1 ~ 1.15, et OCV2 > OCV1
+#   alors que le pack 2 est annonce MOINS plein - l'un des deux compteurs de
+#   SOC derive. La droite a cinq ou six courants differents tranchera.
+#
 # ET SI C'EST LE SHUNT QUI MENT : la pince amperemetrique sur le cable negatif
 #   du pack 2 reste le juge de paix. Si elle lit le meme courant que le pack 1
 #   alors que le BMS en annonce moins, c'est la MESURE qui est fausse et non
@@ -327,8 +344,25 @@ sensor:
       return id(p1_current).state - id(p2_current).state;
     update_interval: 30s
 
-  # Ecart de tension entre les deux packs. En parallele ils sont relies par
-  # les memes barres : un ecart notable revele une resistance de contact.
+  # Ecart de tension entre les deux packs, POSITIF = pack 1 plus haut.
+  #
+  # ELLE CONTIENT UN OFFSET DE MESURE, etabli le 12/09/2026 : a 0.0 A sur les
+  #   deux packs, disjoncteurs fermes, packs en parallele sur la barre - donc
+  #   physiquement au MEME potentiel - cette entite lisait -52 mV, stable a
+  #   +/-5 mV sur toute une nuit (plage -47 a -58). Un ecart reel de cette
+  #   taille aurait fait circuler ~1 A entre les packs ; on lisait 0.0.
+  #   Les deux BMS ne lisent donc pas pareil sur le meme noeud : le pack 2
+  #   affiche ~52 mV de plus. Lequel a raison, un voltmetre sur la barre le
+  #   dira. En attendant, toute lecture se corrige de +0.052 V avant d'etre
+  #   interpretee.
+  #
+  #   NON VERIFIE : que l'offset soit constant en tension. Un defaut de GAIN
+  #   d'ADC se verrait differemment a 51 V et a 57 V. Prochain point de
+  #   mesure : la fin de charge, au repos, vers 57 V.
+  #
+  # Une fois l'offset retire, AU REPOS c'est l'ecart de tension a vide,
+  # OCV1 - OCV2 : le terme constant de la grille en tete de fichier. Sous
+  # courant s'y ajoutent les chutes internes I x R de chaque pack.
   - platform: template
     name: "${upper_devicename} Ecart tension packs Systeme"
     id: sys_ecart_v
