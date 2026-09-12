@@ -81,15 +81,73 @@
 # MAIS ELLE N'EST INTERPRETABLE QUE SOUS CHARGE. A quelques amperes, la
 # repartition est gouvernee par des differences de quelques millivolts et
 # milliohms - la moindre asymetrie de cosse produit un 70/30 sans que cela
-# signifie quoi que ce soit. A 40 A, c'est la resistance interne des packs qui
-# domine et le partage doit s'egaliser.
-#   vers 50-60 % a 40 A ....... normal, fin du dossier
-#   vers 85 % a fort courant .. resistance de contact reelle, reprendre le
-#                               cablage du pack 2 AVANT toute charge serieuse
+# signifie quoi que ce soit.
 #
-# Le test physique discriminant reste la pince amperemetrique sur le cable
-# negatif du pack 2 : si elle lit le meme courant que le pack 1, c'est le
-# shunt du BMS qui ment ; si elle lit vraiment moins, c'est le cablage.
+# =============================================================================
+# COMMENT LIRE CETTE REPARTITION - grille refaite le 12/09/2026
+# ---------------------------------------------------------------------------
+# CE QUI ETAIT ECRIT ICI, et qui est retire :
+#   "vers 50-60 % a 40 A ....... normal, fin du dossier"
+#   "vers 85 % a fort courant .. resistance de contact reelle, reprendre le
+#                                cablage du pack 2"
+#
+#   Cette grille supposait qu'un RELEVE ISOLE a fort courant tranche. Les
+#   mesures l'ont dementie : le partage OSCILLE sur plusieurs jours, avec des
+#   INVERSIONS DE SENS. Or une asymetrie de resistance est fixe - elle ne peut
+#   pas changer de signe. Ce qui oscille est donc autre chose, et un seul
+#   releve ne separe pas les deux causes.
+#
+# LE MODELE. Deux branches sur la meme barre, chacune une force
+#   electromotrice OCV et une resistance de chemin R - interne, cablage,
+#   cosses, disjoncteur confondus. Convention du fichier : positif = charge.
+#
+#     I1 - I2  =  I_total x (R2 - R1)/(R1 + R2)  -  2 x (OCV1 - OCV2)/(R1 + R2)
+#                 \_________ pente __________/      \____ terme constant ____/
+#
+#   TERME CONSTANT - l'ecart de tension a vide. C'est un DECALAGE EN AMPERES
+#     qui ne depend PAS de la charge. Il derive lentement au fil des jours a
+#     mesure que les SOC se rapprochent puis s'ecartent : c'est lui qui fait
+#     osciller la repartition et croiser les courbes. Il se resorbe seul, le
+#     pack le plus plein alimentant l'autre jusqu'a egalisation.
+#
+#   PENTE - l'asymetrie de resistance. Elle est PROPORTIONNELLE au courant
+#     total. C'est le seul terme qui justifierait de demonter une cosse.
+#     Son signe designe le chemin le plus resistant : pente negative, le
+#     pack 1 prend proportionnellement moins a mesure que la charge monte,
+#     donc R1 > R2.
+#
+# CE QU'IL FAUT MESURER : non pas un pourcentage, mais (I1 - I2) RELEVE A
+#   PLUSIEURS COURANTS TOTAUX. La droite separe proprement les deux termes, ce
+#   qu'aucun releve isole ne permet :
+#     pente nulle ....... branches equilibrees, quel que soit le decalage
+#                         constant observe au repos. Dossier clos.
+#     pente non nulle ... asymetrie reelle, et son signe designe le coupable.
+#
+# POURQUOI LE POURCENTAGE TROMPE : a ecart de tension constant, l'ecart en
+#   AMPERES ne bouge pas quand la charge augmente - mais rapporte a un total
+#   plus grand, il donne un pourcentage plus proche de 50 %. Un partage qui
+#   "s'ameliore" a 40 A n'a donc rien prouve : c'est de l'arithmetique, pas une
+#   guerison. C'est exactement le piege que l'ancienne grille tendait.
+#
+# LE TEST RAPIDE, sans tracer de droite : un ECHELON de courant. Allumer une
+#   charge et relever dI1 et dI2 sur quelques secondes. Sur ce laps de temps
+#   l'OCV ne bouge pas, le terme constant s'annule, et il reste simplement
+#     dI1 x R1 = dI2 x R2
+#   Le rapport des variations donne directement le rapport inverse des
+#   resistances. C'est le meme raisonnement que la pente, en une seule mesure.
+#
+# LIMITES DU MODELE, pour ne pas lui faire dire plus qu'il ne dit : il suppose
+#   les deux branches lineaires et R constante sur la plage exploree. La
+#   resistance interne d'une cellule varie avec le SOC et la temperature, donc
+#   les points doivent etre releves dans une meme session, pas etales sur des
+#   jours - sinon la derive de l'OCV se reinvite dans la pente.
+#
+# ET SI C'EST LE SHUNT QUI MENT : la pince amperemetrique sur le cable negatif
+#   du pack 2 reste le juge de paix. Si elle lit le meme courant que le pack 1
+#   alors que le BMS en annonce moins, c'est la MESURE qui est fausse et non
+#   le cablage - et aucune droite tracee a partir de ces valeurs n'aurait de
+#   sens.
+# =============================================================================
 #
 # LES VALEURS ABSOLUES MENTAIENT - corrige le 11/09/2026.
 #   Le calcul etait fabs(i1) / (fabs(i1) + fabs(i2)). Quand les deux packs
@@ -224,6 +282,11 @@ sensor:
   # sont identiques quand les packs vont dans le meme sens - donc pas de
   # rupture dans l'historique - mais seul l'algebrique refuse de donner 50 %
   # a deux courants qui s'annulent.
+  #
+  # POUR CONCLURE QUOI QUE CE SOIT sur le cablage, ce pourcentage ne suffit
+  # pas : voir "COMMENT LIRE CETTE REPARTITION" en tete de fichier. C'est
+  # (I1 - I2) releve a plusieurs courants totaux qui tranche, pas un
+  # pourcentage releve une fois.
   - platform: template
     name: "${upper_devicename} Repartition Pack1 Systeme"
     id: sys_repartition
@@ -242,6 +305,26 @@ sensor:
       float tot = i1 + i2;
       if (fabs(tot) < 0.5f) return NAN;
       return i1 / tot * 100.0f;
+    update_interval: 30s
+
+  # L'ECART EN AMPERES, la grandeur qui se lit vraiment - cf. l'encadre en
+  # tete de fichier. A ecart de tension a vide constant, elle ne bouge PAS
+  # quand la charge augmente, alors que le pourcentage se rapproche de 50 %
+  # par simple arithmetique. Tracee contre "Courant Systeme", sa pente donne
+  # l'asymetrie de resistance et son ordonnee a l'origine l'ecart de tension.
+  # Positive : le pack 1 prend plus que le pack 2, dans le sens du courant.
+  - platform: template
+    name: "${upper_devicename} Ecart courant packs Systeme"
+    id: sys_ecart_i
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:unfold-more-vertical
+    entity_category: diagnostic
+    lambda: |-
+      if (isnan(id(p1_current).state) || isnan(id(p2_current).state)) return NAN;
+      return id(p1_current).state - id(p2_current).state;
     update_interval: 30s
 
   # Ecart de tension entre les deux packs. En parallele ils sont relies par

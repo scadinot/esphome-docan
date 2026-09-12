@@ -97,6 +97,46 @@ Sans elle, une case vide serait indiscernable d'un pack muet. Les deux
 derniers états se distinguent par les compteurs d'échec : au-delà de trois
 cycles c'est un vrai silence, en-deçà c'est le démarrage.
 
+## Lire la répartition : la pente, pas le pourcentage
+
+L'ancienne grille de lecture disait qu'un relevé à fort courant tranche
+— « vers 85 % à 40 A = résistance de contact, reprendre le câblage ».
+Retirée le 12/09/2026 : les mesures montrent que le partage **oscille sur
+plusieurs jours avec des inversions de sens**, ce qu'une asymétrie de
+résistance, fixe par nature, ne peut pas produire.
+
+Deux branches sur la même barre, convention positif = charge :
+
+```
+I1 - I2 = I_total x (R2 - R1)/(R1 + R2) - 2 x (OCV1 - OCV2)/(R1 + R2)
+          \_________ pente __________/   \____ terme constant ____/
+```
+
+| Terme | Ce qu'il vaut | Ce qu'il signifie |
+|---|---|---|
+| Constant | écart de tension à vide | décalage en ampères indépendant de la charge, dérive sur des jours, se résorbe seul |
+| Pente | asymétrie de résistance | proportionnelle au courant total — **le seul terme qui justifie de démonter une cosse** |
+
+Ce qui se mesure est donc `I1 - I2` relevé **à plusieurs courants totaux** :
+pente nulle, branches équilibrées ; pente non nulle, asymétrie réelle dont le
+signe désigne le coupable. L'entité `Ecart courant packs Systeme` expose
+directement cette grandeur.
+
+Le pourcentage trompe : à écart de tension constant, l'écart en ampères ne
+bouge pas quand la charge augmente, mais rapporté à un total plus grand il se
+rapproche de 50 %. Un partage qui « s'améliore » à 40 A n'a rien prouvé.
+
+Sans tracer de droite : un **échelon** de courant. Sur quelques secondes l'OCV
+ne bouge pas, le terme constant s'annule, et `dI1 x R1 = dI2 x R2`.
+
+## Le compteur de cycles ne compte pas des cycles
+
+Il s'incrémente en **ampères-heures cumulés**, pas en charges complètes
+validées. Constaté le 11/09/2026 : le pack 2 est passé de 3 à 4 pendant une
+période sans aucune charge. La conclusion tirée le 3 septembre — « le pack 2
+a refusé de valider une charge complète » — était donc fausse. C'est écrit
+dans les deux fichiers de pack, au-dessus de l'entité.
+
 ## Surface exploitable du BMS
 
 Établie par test le 24/08/2026, les deux formes de requête essayées :
