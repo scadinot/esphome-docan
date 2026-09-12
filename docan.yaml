@@ -186,6 +186,35 @@ logger:
 #   reset_pin: GPIO9
 # =============================================================================
 
+# =============================================================================
+# TAMPON DE RECEPTION - pose explicitement le 12/09/2026
+# ---------------------------------------------------------------------------
+# LE CALCUL, puisque c'est lui qui tranche :
+#   trame = 18 octets d'ossature + INFO
+#   INFO analogique = 30 + 4 x ncell + 4 x ntemp = 30 + 64 + 20 = 114
+#   soit 132 octets pour 16 cellules et 5 sondes. C'est la plus longue des
+#   trois trames : l'alarme fait 74 octets, les seuils environ 68.
+#
+# LA REVUE DU 11/09 AVAIT TORT ICI, et le corriger commence par le dire. Elle
+#   affirmait qu'un pack de 24 cellules depasserait les 256 octets par defaut.
+#   Non : 30 + 96 + 20 + 18 = 164 octets. Meme en poussant a 24 cellules ET
+#   8 sondes on reste a 176. Le defaut suffisait largement et le chiffre
+#   avance ne resistait pas au calcul - il n'a jamais ete pose.
+#
+# POURQUOI LA LIGNE EST QUAND MEME ECRITE : elle ne comble pas un manque de
+#   place, elle supprime une DEPENDANCE A UN DEFAUT AMONT. La configuration
+#   s'appuyait sur les 256 octets d'ESPHome sans le dire ; si cette valeur
+#   changeait dans une version future, rien ici ne le signalerait et la marge
+#   reelle redeviendrait inconnue. La poser rend le calcul ci-dessus
+#   verifiable : 132 sur 512, soit 26 % occupes.
+#
+# CE QUE CA COUTE, mesure et non suppose : RIEN a la compilation. Les deux
+#   builds encadrant le changement donnent le meme .bss, 37 104 octets - le
+#   tampon n'est pas en RAM statique, c'est le pilote UART de l'ESP-IDF qui
+#   l'alloue sur le TAS au demarrage. Le surcout est donc de 256 octets de
+#   tas, pris sur les 231 781 octets de DIRAM libres. Invisible.
+#   Le vrai gain n'est pas la place : c'est que le chiffre soit ecrit.
+# =============================================================================
 uart:
   id: uart_bms
   tx_pin: GPIO17
@@ -194,6 +223,7 @@ uart:
   data_bits: 8
   parity: NONE
   stop_bits: 1
+  rx_buffer_size: 512
 
 globals:
   # Les seuils sont des constantes de configuration : interroges une fois sur

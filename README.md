@@ -186,8 +186,26 @@ esphome_pull_files(filenames=["docan.yaml", "packages/dc-pack1.yaml", ...])
 
 Le paramètre s'appelle `filenames`. Omis, l'outil ne rend que la racine.
 
-## À faire au prochain flash
+## Taille des trames et tampon de réception
 
-Compilé avec ESPHome **2026.7.4**. L'add-on est passé en **2026.8.2**, qui
-déprécie `command_throttle` au profit de `turnaround_time` sur le composant
-`modbus`.
+```
+trame = 18 octets d'ossature + INFO
+
+analogique  INFO = 30 + 4 x ncell + 4 x ntemp = 114   ->  132 octets
+alarmes     INFO = 14 + 2 x ncell + 2 x ntemp =  56   ->   74 octets
+seuils      INFO >= 50                                ->  ~68 octets
+```
+
+`rx_buffer_size: 512` est posé explicitement dans `docan.yaml` : 132 sur 512,
+26 % occupés. Ce n'était pas une question de place — les 256 octets par défaut
+d'ESPHome suffisaient, y compris pour un hypothétique pack de 24 cellules
+(164 octets). La ligne supprime la dépendance à un défaut amont non écrit.
+
+Coût mesuré : nul à la compilation, `.bss` identique de part et d'autre du
+changement. Le pilote UART de l'ESP-IDF alloue ce tampon sur le tas.
+
+## Version ESPHome
+
+Compilé et flashé avec **2026.8.2**, la version de l'add-on. Aucun composant
+`modbus` ici : la dépréciation de `command_throttle` ne concerne que le
+montage Growatt.
