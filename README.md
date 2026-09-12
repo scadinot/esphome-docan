@@ -31,6 +31,15 @@ dc-cellules   les 32 tensions de cellules, 16 par pack
 dc-systeme    l'agrégat des deux packs
 ```
 
+Une entité `PackN` se trouve dans `dc-packN`, sans exception : les quatre
+`Energie totale/restante PackN` vivaient dans `dc-systeme` et ont été
+rapatriées le 12/09/2026. `dc-systeme` ne garde que les versions `Systeme`.
+Les noms d'entités n'ont pas changé, l'historique est continu.
+
+La tension nominale de conversion Ah → kWh est la substitution
+`tension_nominale` de `docan.yaml`, puisqu'elle sert maintenant dans trois
+paquets.
+
 Le protocole PYLON n'expose **aucune trame d'ensemble** — il interroge les
 modules un par un. L'agrégat de `dc-systeme` est donc calculé côté ESP :
 

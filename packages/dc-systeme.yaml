@@ -52,6 +52,20 @@
 #   parfait, et on ne descend jamais a 0 % (Prog 21 coupe a 20 % cote
 #   onduleur). C'est une valeur de plaque, utile pour dimensionner et pour
 #   comparer, pas pour predire une autonomie au watt pres.
+#
+# OU SONT CES ENTITES - reorganise le 12/09/2026.
+#   Les versions Pack1 et Pack2 etaient definies ICI, par commodite : les
+#   ecrire au meme endroit evitait de toucher aux deux paquets. Le resultat
+#   est qu'on cherchait une entite Pack1 dans dc-pack1.yaml sans l'y trouver.
+#   Elles sont reparties dans leurs paquets respectifs, aupres des capacites
+#   en Ah dont elles derivent. Ce fichier ne garde que les deux versions
+#   Systeme - c'est sa raison d'etre.
+#
+#   AUCUN NOM D'ENTITE N'A CHANGE : les identifiants Home Assistant derivent
+#   du nom, pas du fichier. L'historique est continu, rien a renommer.
+#
+#   Le facteur 51.2 est devenu la substitution tension_nominale, declaree
+#   dans docan.yaml : il servait dans un seul fichier, il en sert trois.
 # =============================================================================
 # L'ANOMALIE "10 POUR 1" - deux affirmations retirees le 26/08/2026
 # ---------------------------------------------------------------------------
@@ -167,32 +181,24 @@ sensor:
     update_interval: 30s
 
   # --- Les memes capacites, en energie --------------------------------------
-  # x 51.2 V nominal / 1000. Voir l'encadre en tete de fichier : tension
-  # NOMINALE et non instantanee, sinon le chiffre sauterait de 20 % sans que
-  # rien ne change physiquement.
+  # x tension_nominale / 1000, la substitution declaree dans docan.yaml. Voir
+  # l'encadre en tete de fichier : tension NOMINALE et non instantanee, sinon
+  # le chiffre sauterait de 20 % sans que rien ne change physiquement.
+  #
+  # SEULES LES VERSIONS SYSTEME SONT ICI. Les versions Pack1 et Pack2 sont
+  # dans dc-pack1.yaml et dc-pack2.yaml, aupres des capacites en Ah dont elles
+  # derivent.
 
   - platform: template
-    name: "${upper_devicename} Energie totale Pack1"
+    name: "${upper_devicename} Energie restante Systeme"
     unit_of_measurement: "kWh"
     device_class: energy_storage
     state_class: measurement
     accuracy_decimals: 2
-    icon: mdi:battery-high
+    icon: mdi:battery-medium
     lambda: |-
-      if (isnan(id(p1_total).state)) return NAN;
-      return id(p1_total).state * 51.2f / 1000.0f;
-    update_interval: 30s
-
-  - platform: template
-    name: "${upper_devicename} Energie totale Pack2"
-    unit_of_measurement: "kWh"
-    device_class: energy_storage
-    state_class: measurement
-    accuracy_decimals: 2
-    icon: mdi:battery-high
-    lambda: |-
-      if (isnan(id(p2_total).state)) return NAN;
-      return id(p2_total).state * 51.2f / 1000.0f;
+      if (isnan(id(p1_remaining).state) || isnan(id(p2_remaining).state)) return NAN;
+      return (id(p1_remaining).state + id(p2_remaining).state) * ${tension_nominale}f / 1000.0f;
     update_interval: 30s
 
   - platform: template
@@ -204,43 +210,7 @@ sensor:
     icon: mdi:battery-high
     lambda: |-
       if (isnan(id(p1_total).state) || isnan(id(p2_total).state)) return NAN;
-      return (id(p1_total).state + id(p2_total).state) * 51.2f / 1000.0f;
-    update_interval: 30s
-
-  - platform: template
-    name: "${upper_devicename} Energie restante Pack1"
-    unit_of_measurement: "kWh"
-    device_class: energy_storage
-    state_class: measurement
-    accuracy_decimals: 2
-    icon: mdi:battery-medium
-    lambda: |-
-      if (isnan(id(p1_remaining).state)) return NAN;
-      return id(p1_remaining).state * 51.2f / 1000.0f;
-    update_interval: 30s
-
-  - platform: template
-    name: "${upper_devicename} Energie restante Pack2"
-    unit_of_measurement: "kWh"
-    device_class: energy_storage
-    state_class: measurement
-    accuracy_decimals: 2
-    icon: mdi:battery-medium
-    lambda: |-
-      if (isnan(id(p2_remaining).state)) return NAN;
-      return id(p2_remaining).state * 51.2f / 1000.0f;
-    update_interval: 30s
-
-  - platform: template
-    name: "${upper_devicename} Energie restante Systeme"
-    unit_of_measurement: "kWh"
-    device_class: energy_storage
-    state_class: measurement
-    accuracy_decimals: 2
-    icon: mdi:battery-medium
-    lambda: |-
-      if (isnan(id(p1_remaining).state) || isnan(id(p2_remaining).state)) return NAN;
-      return (id(p1_remaining).state + id(p2_remaining).state) * 51.2f / 1000.0f;
+      return (id(p1_total).state + id(p2_total).state) * ${tension_nominale}f / 1000.0f;
     update_interval: 30s
 
   # --- Diagnostic de l'anomalie ---------------------------------------------

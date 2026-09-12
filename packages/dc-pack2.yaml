@@ -379,6 +379,40 @@ sensor:
     icon: mdi:battery-high
     update_interval: never
 
+  # Les memes capacites, exprimees en energie. Elles vivaient dans
+  # dc-systeme.yaml jusqu'au 12/09/2026, par simple commodite d'ecriture : on
+  # cherchait une entite Pack2 dans ce fichier-ci et elle n'y etait pas.
+  # Le facteur est la substitution tension_nominale, declaree dans docan.yaml.
+  # L'argumentaire - tension NOMINALE et non instantanee - reste en tete de
+  # dc-systeme.yaml, qui porte les versions Systeme de ces deux entites.
+  #
+  # Pas d'invalidation a prevoir dans invalider() : ces lambdas lisent
+  # p2_remaining et p2_total, qui passent a NaN d'eux-memes apres trois
+  # cycles muets. Elles suivent.
+  - platform: template
+    name: "${upper_devicename} Energie restante Pack2"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-medium
+    lambda: |-
+      if (isnan(id(p2_remaining).state)) return NAN;
+      return id(p2_remaining).state * ${tension_nominale}f / 1000.0f;
+    update_interval: 30s
+
+  - platform: template
+    name: "${upper_devicename} Energie totale Pack2"
+    unit_of_measurement: "kWh"
+    device_class: energy_storage
+    state_class: measurement
+    accuracy_decimals: 2
+    icon: mdi:battery-high
+    lambda: |-
+      if (isnan(id(p2_total).state)) return NAN;
+      return id(p2_total).state * ${tension_nominale}f / 1000.0f;
+    update_interval: 30s
+
   # ATTENTION : ce compteur s'incremente en AMPERES-HEURES CUMULES, pas en
   # charges completes validees. Constate le 11/09/2026 - le pack 2 est passe
   # de 3 a 4 pendant une periode SANS aucune charge. Ne pas en deduire qu'une

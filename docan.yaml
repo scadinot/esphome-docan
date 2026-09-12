@@ -109,6 +109,14 @@ substitutions:
   upper_devicename: "Docan"
   ap_ssid: "Docan-Setup"
 
+  # Tension NOMINALE d'un pack : 16 cellules LiFePO4 a 3.2 V. Elle convertit
+  # les Ah en kWh, et depuis le 12/09/2026 elle sert dans TROIS paquets -
+  # dc-pack1, dc-pack2 et dc-systeme - d'ou la substitution plutot que la
+  # constante recopiee trois fois.
+  # Pourquoi la tension nominale et non l'instantanee : argumente en tete de
+  # packages/dc-systeme.yaml.
+  tension_nominale: "51.2"
+
 packages:
   pack1:    !include packages/dc-pack1.yaml
   pack2:    !include packages/dc-pack2.yaml
