@@ -63,6 +63,31 @@ Trois et pas un : une trame perdue arrive, trois d'affilée non. Les seuils de
 protection (CID2=47) ne sont pas invalidés — ce sont des constantes de
 configuration, pas des mesures.
 
+## La répartition ne ment plus quand les courants s'opposent
+
+Corrigé le 11/09/2026. Le calcul était `fabs(i1) / (fabs(i1) + fabs(i2))`.
+Exact quand les deux packs vont dans le même sens — le calcul algébrique qui
+le remplace rend les mêmes chiffres, l'historique reste comparable.
+
+Mais à `+1,0 A` et `−1,0 A`, les valeurs absolues affichaient **50 %**, le
+partage parfait, alors qu'il ne passe rien vers l'onduleur et qu'un pack se
+vide dans l'autre : le pire symptôme portait le meilleur chiffre. Et c'est
+précisément le régime attendu à consommation nulle.
+
+Désormais le dénominateur est `i1 + i2` — le vrai courant système — et rien
+n'est publié si les packs vont en sens contraire au-delà de 0,3 A. Une entité
+`Regime packs Systeme` nomme alors ce qui se passe :
+
+```
+Repos | Charge | Decharge
+Transfert Pack1 vers Pack2 | Transfert Pack2 vers Pack1
+Initialisation | Pas de reponse
+```
+
+Sans elle, une case vide serait indiscernable d'un pack muet. Les deux
+derniers états se distinguent par les compteurs d'échec : au-delà de trois
+cycles c'est un vrai silence, en-deçà c'est le démarrage.
+
 ## Surface exploitable du BMS
 
 Établie par test le 24/08/2026, les deux formes de requête essayées :

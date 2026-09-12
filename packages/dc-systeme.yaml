@@ -76,6 +76,26 @@
 # Le test physique discriminant reste la pince amperemetrique sur le cable
 # negatif du pack 2 : si elle lit le meme courant que le pack 1, c'est le
 # shunt du BMS qui ment ; si elle lit vraiment moins, c'est le cablage.
+#
+# LES VALEURS ABSOLUES MENTAIENT - corrige le 11/09/2026.
+#   Le calcul etait fabs(i1) / (fabs(i1) + fabs(i2)). Quand les deux packs
+#   vont dans le MEME sens il est exact, et le calcul algebrique qui le
+#   remplace rend rigoureusement les memes chiffres : l'historique reste
+#   comparable, rien ne se decale dans les graphiques.
+#
+#   Mais quand les signes S'OPPOSENT - +1.0 A d'un cote, -1.0 A de l'autre -
+#   les valeurs absolues affichaient 50 %, soit le partage parfait, alors
+#   qu'il ne passe RIEN vers l'onduleur et qu'un pack se vide dans l'autre.
+#   Le pire symptome portait le meilleur chiffre.
+#
+#   Et ce n'est pas un cas d'ecole : c'est precisement le regime attendu a
+#   consommation nulle, quand le pack le plus plein alimente le moins plein.
+#   Exactement ce qu'on cherche a caracteriser depuis une semaine.
+#
+#   DESORMAIS : denominateur algebrique i1 + i2, c'est-a-dire le vrai courant
+#   systeme, et rien n'est publie si les deux packs vont en sens contraire
+#   au-dela de 0.3 A. L'entite "Regime packs Systeme" nomme alors ce qui se
+#   passe - sinon une case vide serait indiscernable d'un pack muet.
 # =============================================================================
 
 sensor:
@@ -225,8 +245,15 @@ sensor:
 
   # --- Diagnostic de l'anomalie ---------------------------------------------
 
-  # Part du courant total prise par le pack 1. Non publiee sous 0.5 A total :
-  # au repos le rapport n'a aucun sens et sauterait dans tous les sens.
+  # Part du courant systeme prise par le pack 1. Trois cas ou elle n'est PAS
+  # publiee, tous documentes dans l'en-tete :
+  #   un pack muet ......... isnan, cf. dc-pack1.yaml
+  #   sous 0.5 A systeme ... le rapport sauterait dans tous les sens
+  #   sens opposes ......... un pack alimente l'autre, ce n'est plus un partage
+  # Le denominateur est ALGEBRIQUE : i1 + i2, pas fabs(i1) + fabs(i2). Les deux
+  # sont identiques quand les packs vont dans le meme sens - donc pas de
+  # rupture dans l'historique - mais seul l'algebrique refuse de donner 50 %
+  # a deux courants qui s'annulent.
   - platform: template
     name: "${upper_devicename} Repartition Pack1 Systeme"
     id: sys_repartition
@@ -239,9 +266,12 @@ sensor:
       if (isnan(id(p1_current).state) || isnan(id(p2_current).state)) return NAN;
       float i1 = id(p1_current).state;
       float i2 = id(p2_current).state;
-      float tot = fabs(i1) + fabs(i2);
-      if (tot < 0.5f) return NAN;
-      return fabs(i1) / tot * 100.0f;
+      // Sens opposes au-dela de la bande morte : transfert entre packs.
+      if (i1 >  0.3f && i2 < -0.3f) return NAN;
+      if (i1 < -0.3f && i2 >  0.3f) return NAN;
+      float tot = i1 + i2;
+      if (fabs(tot) < 0.5f) return NAN;
+      return i1 / tot * 100.0f;
     update_interval: 30s
 
   # Ecart de tension entre les deux packs. En parallele ils sont relies par
@@ -260,6 +290,44 @@ sensor:
     update_interval: 30s
 
 text_sensor:
+
+  # NOMME le regime des deux packs. Sa premiere raison d'etre est d'expliquer
+  # pourquoi "Repartition Pack1 Systeme" n'est pas publiee : sans elle, une
+  # case vide au repos serait indiscernable d'un pack qui ne repond plus.
+  #
+  # SIGNE : positif = le pack se CHARGE, negatif = il se decharge. Un transfert
+  #   est donc nomme d'apres celui qui donne : i1 < 0 et i2 > 0 se lit
+  #   "Transfert Pack1 vers Pack2".
+  #
+  # BANDE MORTE DE 0.3 A par pack, sans quoi le bruit de mesure ferait basculer
+  #   l'etat a chaque cycle autour de zero. Elle vaut aussi pour le calcul de
+  #   repartition ci-dessus : memes seuils, memes conclusions.
+  #
+  # "Pas de reponse" N'EST PAS "pas encore lu". Pendant les 30 premieres
+  #   secondes apres un demarrage, les courants valent NaN parce qu'aucune
+  #   trame n'est encore arrivee - aucun pack n'a failli. Les compteurs
+  #   d'echec de dc-pack1 et dc-pack2 font la difference : au-dela de 3, c'est
+  #   un vrai silence ; en-deca, c'est l'initialisation. Sans ce test l'entite
+  #   annoncerait une panne a chaque flash.
+  - platform: template
+    name: "${upper_devicename} Regime packs Systeme"
+    id: sys_regime
+    icon: mdi:swap-horizontal
+    entity_category: diagnostic
+    lambda: |-
+      if (isnan(id(p1_current).state) || isnan(id(p2_current).state)) {
+        if (id(p1_miss) >= 3 || id(p2_miss) >= 3) return {"Pas de reponse"};
+        return {"Initialisation"};
+      }
+      float i1 = id(p1_current).state;
+      float i2 = id(p2_current).state;
+      const float S = 0.3f;
+      if (i1 >  S && i2 < -S) return {"Transfert Pack2 vers Pack1"};
+      if (i1 < -S && i2 >  S) return {"Transfert Pack1 vers Pack2"};
+      if (i1 >  S || i2 >  S) return {"Charge"};
+      if (i1 < -S || i2 < -S) return {"Decharge"};
+      return {"Repos"};
+    update_interval: 30s
 
   # Reunit les deux alarmes en une seule entite a surveiller.
   # Rappel : "T2" est un bruit de fond permanent sur ce BMS - champ non
