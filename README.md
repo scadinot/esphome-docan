@@ -285,6 +285,18 @@ changement. Le pilote UART de l'ESP-IDF alloue ce tampon sur le tas.
 
 ## Version ESPHome
 
-Compilé et flashé avec **2026.8.2**, la version de l'add-on. Aucun composant
-`modbus` ici : la dépréciation de `command_throttle` ne concerne que le
-montage Growatt.
+Compilé et flashé avec **2026.9.0** depuis le 26/09/2026 (2026.8.2 du 12 au
+26/09). Aucun composant `modbus` ici : les dépréciations de
+`command_throttle` puis de `skip_updates` ne concernent que le montage
+Growatt. La 2026.9.0 n'a rien signalé sur ce fichier, hormis l'OTA.
+
+## 26/09/2026 — OTA chiffré
+
+Le mot de passe OTA coûtait 3,5 Ko de flash et ne servait qu'aux flasheurs
+sans chiffrement ; ESPHome retire le repli en clair en 2027.3.0. Le bloc
+`ota:` utilise désormais `encryption:` avec la clé API, comme sur les sept
+autres appareils du serveur. Premier flash à 22:51 encore en clair, le
+second à 22:54 annonce « Encrypted connection established »,
+`config_hash=0x958f0561`. Aucune entité touchée. Reste un avertissement de
+compilation : le point `/update` du `web_server` accepte toujours une image
+en clair.

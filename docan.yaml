@@ -154,9 +154,14 @@ api:
   encryption:
     key: !secret api_key
 
+# OTA CHIFFRE depuis le 26/09/2026 (ESPHome 2026.9.0) : le mot de passe
+# coutait 3,5 Ko de flash et ne servait qu'aux flasheurs sans chiffrement.
+# La cle API authentifie le televersement ; le repli en clair disparait en
+# 2027.3.0.
 ota:
   - platform: esphome
-    password: !secret ota_pass
+    encryption:
+      key: !secret api_key
 
 # WARN depuis le 26/08/2026, le portage etant valide.
 # CE QUI RESTE VISIBLE, et c'est l'essentiel :
