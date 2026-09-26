@@ -161,7 +161,6 @@ api:
 ota:
   - platform: esphome
     encryption:
-      key: !secret api_key
 
 # WARN depuis le 26/08/2026, le portage etant valide.
 # CE QUI RESTE VISIBLE, et c'est l'essentiel :
