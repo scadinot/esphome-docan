@@ -14,7 +14,7 @@ Ce dépôt est une copie versionnée. Les modifications partent du serveur.
 |---|---|
 | Carte | Waveshare ESP32-S3-ETH |
 | Adresse IP | 192.168.0.71 |
-| Pack 1 | adresse PYLON 01, **maître**, DIP tous OFF, firmware BMS V1.0.1 |
+| Pack 1 | adresse PYLON 01, **maître**, DIP tous OFF, firmware BMS V1.0.4 depuis le 29/09/2026 (V1.0.1 avant) |
 | Pack 2 | adresse PYLON 02, esclave, DIP1 ON, firmware BMS V1.0.4 |
 | Liaison | RS485-A, 9600 8N1, TX GPIO17 / RX GPIO16 |
 | Capacités | 325,87 Ah et 325,00 Ah — 650,87 Ah au total |
@@ -239,7 +239,28 @@ Vérifié le 4 septembre par chronométrage d'une transition — le SOC transmis
 suit le calcul ÷10 à dix secondes près, écartant les hypothèses « pack maître
 seul » et « vrai système ».
 
-Signalé à Docan, mise à jour du firmware maître en cours de discussion.
+**Résolu le 29/09/2026.** Après trois semaines d'échanges — démonstration
+mesurée, vidéo, câblage innocenté — Docan a mis à jour le module WiFi du pack
+1 à distance, puis le BMS maître est passé de V1.0.1 à V1.0.4, entre 21:44 et
+22:09. Vérifié :
+
+- l'écran du maître affiche une capacité système d'environ **651 Ah** au lieu
+  de 358,4, et le courant de l'esclave tel que l'esclave l'affiche ;
+- la limite de courant de charge transmise par CAN à l'onduleur (H34 côté
+  Growatt) passe de **110 A à 210 A** : 100 A pour le maître plus 10 A pour
+  l'esclave divisé par dix, devenus deux packs comptés normalement ;
+- le réglage PYLON du RS485 est conservé, l'ESP lit les deux packs comme
+  avant, aucune alarme.
+
+Pendant la mise à jour, la liaison CAN est tombée deux fois (21:56 et 22:07)
+et le binaire *[BMS] Communication Error* côté Growatt l'a signalé, deux
+heures après sa correction. Le SOC transmis, lui, ne se départagera du modèle
+« ÷ 10 » que lorsque les deux packs seront à des niveaux différents : à
+99,8 % les deux calculs coïncident.
+
+Au passage, la vidéo d'installation de Docan montrait le même défaut sur leur
+propre banc — 303,1 / 344,6 Ah pour deux packs dont l'un contenait à lui seul
+environ 292 Ah — ce qui a clos la discussion sur le câblage.
 
 ## L'alarme T2 est filtrée
 
