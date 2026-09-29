@@ -97,7 +97,14 @@
 # CONFIGURATION DES BMS (via l'ecran de CHAQUE pack)
 #   RS485-A  PYLON     9600 bps   monitoring ESP32
 #   RS485-B  inter-BMS 9600 bps   NE PAS TOUCHER
-#   CAN2     PYLON12   500 kbps   vers l'onduleur (Prog 36 = L52)
+#   CAN2     PYLON12   500 kbps   vers l'onduleur (cote Growatt : ecran PrCl
+#                                 = L52, sous-reglage du Prog 05 depuis le
+#                                 firmware 100.08 - il n'y a plus de Prog 36)
+#   PRISES PHYSIQUES (photos du 28/09/2026) : l'ESP est sur la prise marquee
+#   "RS485" des deux packs ; le lien entre packs passe par la paire marquee
+#   "485A / 485B", cablee MAITRE 485B -> ESCLAVE 485A ; le CAN du maitre
+#   seul va a l'onduleur. La video d'installation Docan cable le lien a
+#   l'inverse (maitre 485A -> esclave 485B) et affiche pourtant le meme /10.
 #   Esclave : DIP1 ON, le reste OFF = adresse 2
 #
 #   Options RS485-A, toutes a 9600 : GROWATT-P | SRNE-P | GT-P | PYLON |
