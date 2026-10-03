@@ -321,3 +321,71 @@ second à 22:54 annonce « Encrypted connection established »,
 `config_hash=0x958f0561`. Aucune entité touchée. Reste un avertissement de
 compilation : le point `/update` du `web_server` accepte toujours une image
 en clair.
+
+## 03/10/2026 — partage des packs, réglages des BMS, seuils de température
+
+**Une décharge de 20 h à 2,3 A, puis des paliers à 20–55 A.** Du 01/10 18:20
+au 02/10 14:14, onduleurs en SBU, le pack 1 a fourni 31,0 Ah et le pack 2
+14,4 Ah (68 / 32 %). Le partage a convergé seul — 78 % à 20:20, 70 % à 02:20,
+61 % à 08:20, 57 % à 12:20 — pendant que l'écart de tension corrigé restait
+entre +1 et +10 mV. Le 03/10, sous charge :
+
+| Courant total | Pack 1 | Pack 2 | Part du pack 1 |
+|---|---|---|---|
+| 31 A | −15,6 A | −15,4 A | 50 % |
+| 29 A | −14,4 A | −14,4 A | 50 % |
+| 22 A | −10,7 A | −11,5 A | 48 % |
+| 47 A | −21,9 A | −24,7 A | 47 % |
+| 55 A | −26,1 A | −28,9 A | 47 % |
+
+C'est la droite du 12/09 : pente de quelques pour cent (R1 ≈ 1,05 × R2) et
+terme constant qui a changé de signe entre le 02 et le 03/10, le pack 1
+ayant pris de l'avance. À faible courant le terme constant domine et le
+pourcentage n'a aucun sens ; à fort courant on est à 50 / 50. Rien à
+resserrer, rien à régler.
+
+**Aucun réglage de BMS ne répartit le courant entre deux packs**, et les
+réglages sont identiques. Relevé du 03/10 dans l'application iPhone *BMS
+Insight*, 36 paramètres, les mêmes sur les deux packs après la mise à jour
+V1.0.4 du pack 1 :
+
+- tensions : cellule 3 650 / 2 700 mV (protection), 3 580 / 2 800 mV
+  (alarme) ; total 58,4 / 43,2 V et 57 / 44,8 V ; écart 800 et 500 mV ;
+- courants : protection 220 A, alarme 205 A, en charge comme en décharge ;
+- températures (protection) : charge 55 / −5 °C, décharge 60 / −20 °C,
+  ambiance 65 / −25 °C, MOS 110 °C ;
+- fin de charge : *Constant V* 56,00 V, *Constant C* 2 A ; équilibrage à
+  partir de 3 450 mV et 30 mV d'écart ; alarme SOC 15 %, retour 20 % ;
+- options : limiteur « Passive current limit 100 % », protection incendie,
+  shunt et antivol fermés.
+
+Firmware `DR_YP02_16S200JC26_V1.0.4_T1`, module `DR-WIFI02_V1.4.11`, boot
+V2.21 des deux côtés. Deux lots de fabrication : 03/09/2025 et 17/11/2025.
+
+**Une seule différence : *Design Capacity* vaut 300 Ah sur le pack 1 (maître)
+et 314 Ah sur le pack 2.** Sans effet sur le SOC (restant ÷ pleine) ni sur le
+partage ; question à poser à Docan (message rédigé le 03/10), rien n'a été
+écrit dans les BMS.
+
+**Qui est qui dans l'application** — l'ordre y est l'inverse du nôtre :
+
+| Module WiFi | Écran du pack | Ici et dans HA |
+|---|---|---|
+| `DWF841FE8118BD1` | `#.00` | Pack 1, maître |
+| `DWF9454C538CBA9` | `#.01` | Pack 2, esclave |
+
+Établi par la capacité restante lue au même instant des deux côtés.
+
+**Les seuils de température lus par l'ESP sont 10 °C trop hauts.** Le
+service 47 donne 65 / 5 °C en charge et 70 / −10 °C en décharge ; les BMS
+sont réglés à 55 / −5 et 60 / −20. Les températures *mesurées*, décodées avec
+la même formule, tombent juste (20,6 °C pour 21 / 21 / 20 / 20 à l'écran) :
+c'est donc la trame du BMS qui est décalée, pas le décodage — même famille
+que la sonde recopiée cinq fois et l'alarme T2. Les entités ne sont pas
+corrigées ; la référence est l'application. Deux noms sont trompeurs et le
+restent, on ne renomme pas une entité : *Seuil cellule basse* (3,58 V) est
+l'alarme de surtension cellule, *Seuil cellule sous-tension* (2,80 V)
+l'alarme de sous-tension, la coupure étant à 2,70 V.
+
+L'écran des packs montre toujours ce que le bus ne donne pas : MOS 23 °C et
+ambiance 25 °C quand les cellules sont à 20–21 °C.
