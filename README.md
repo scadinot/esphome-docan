@@ -364,7 +364,7 @@ V2.21 des deux côtés. Deux lots de fabrication : 03/09/2025 et 17/11/2025.
 
 **Une seule différence : *Design Capacity* vaut 300 Ah sur le pack 1 (maître)
 et 314 Ah sur le pack 2.** Sans effet sur le SOC (restant ÷ pleine) ni sur le
-partage ; question à poser à Docan (message rédigé le 03/10), rien n'a été
+partage ; question posée à Docan le 03/10 (réponse attendue), rien n'a été
 écrit dans les BMS.
 
 **Qui est qui dans l'application** — l'ordre y est l'inverse du nôtre :
