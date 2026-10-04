@@ -70,6 +70,12 @@ globals:
     restore_value: no
     initial_value: '0'
 
+  # Vrai des qu'une trame a presente une somme de controle juste.
+  - id: p1_chk
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
 script:
 
   - id: p1_analog
@@ -127,6 +133,28 @@ script:
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
           if (f.size() < 16) { echec(); return; }
+          // Trame abimee = trame rejetee (04/10/2026). Un caractere hors
+          // hexadecimal partait tel quel dans "Alarmes brut", et Home
+          // Assistant coupe la liaison API sur une chaine qui n'est pas de
+          // l'UTF-8 : trois reconnexions par seconde le 04/10 a 19:37.
+          // La somme de controle n'est exigee qu'une fois vue juste (p1_chk) :
+          // ce BMS remplit mal ses trames, on ne parie pas sur sa conformite.
+          {
+            bool hex = true;
+            unsigned sum = 0;
+            for (size_t i = 0; hex && i < f.size(); i++) {
+              if (!isxdigit((unsigned char) f[i])) hex = false;
+              else if (i + 4 < f.size()) sum += (unsigned char) f[i];
+            }
+            bool chk = hex && ((0x10000 - (sum & 0xFFFF)) & 0xFFFF)
+                == (unsigned) strtol(f.substr(f.size() - 4).c_str(), nullptr, 16);
+            if (chk) id(p1_chk) = true;
+            if (!hex || (id(p1_chk) && !chk)) {
+              ESP_LOGW("p1", "analog : trame abimee, rejetee");
+              echec();
+              return;
+            }
+          }
           if (f.compare(6, 2, "00") != 0) {
             ESP_LOGW("p1", "analog : RTN=%s", f.substr(6, 2).c_str());
             echec();
@@ -284,6 +312,22 @@ script:
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
           if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          // Trame abimee = trame rejetee, voir p1_analog.
+          {
+            bool hex = true;
+            unsigned sum = 0;
+            for (size_t i = 0; hex && i < f.size(); i++) {
+              if (!isxdigit((unsigned char) f[i])) hex = false;
+              else if (i + 4 < f.size()) sum += (unsigned char) f[i];
+            }
+            bool chk = hex && ((0x10000 - (sum & 0xFFFF)) & 0xFFFF)
+                == (unsigned) strtol(f.substr(f.size() - 4).c_str(), nullptr, 16);
+            if (chk) id(p1_chk) = true;
+            if (!hex || (id(p1_chk) && !chk)) {
+              ESP_LOGW("p1", "alarme : trame abimee, rejetee");
+              return;
+            }
+          }
           std::string info = f.substr(12, f.size() - 16);
           int len = (int) info.size();
 
@@ -360,6 +404,22 @@ script:
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
           if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          // Trame abimee = trame rejetee, voir p1_analog.
+          {
+            bool hex = true;
+            unsigned sum = 0;
+            for (size_t i = 0; hex && i < f.size(); i++) {
+              if (!isxdigit((unsigned char) f[i])) hex = false;
+              else if (i + 4 < f.size()) sum += (unsigned char) f[i];
+            }
+            bool chk = hex && ((0x10000 - (sum & 0xFFFF)) & 0xFFFF)
+                == (unsigned) strtol(f.substr(f.size() - 4).c_str(), nullptr, 16);
+            if (chk) id(p1_chk) = true;
+            if (!hex || (id(p1_chk) && !chk)) {
+              ESP_LOGW("p1", "seuils : trame abimee, rejetee");
+              return;
+            }
+          }
           std::string info = f.substr(12, f.size() - 16);
           if (info.size() < 50) return;
 

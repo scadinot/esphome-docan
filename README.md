@@ -389,3 +389,52 @@ l'alarme de sous-tension, la coupure étant à 2,70 V.
 
 L'écran des packs montre toujours ce que le bus ne donne pas : MOS 23 °C et
 ambiance 25 °C quand les cellules sont à 20–21 °C.
+
+## 04/10/2026 — capacité du pack 1 passée à 200 Ah, trames abîmées — EN COURS
+
+**Ce qui a changé dans le BMS du maître**, entre 18:10 et 18:25, sans
+qu'on sache encore par qui (question posée à l'utilisateur et à Docan) :
+
+| Paramètre du pack 1 | 03/10 | 04/10, 19:34 |
+|---|---|---|
+| *Full Capacity* | 325,8 Ah | **200 Ah** |
+| *Design Capacity* | 300 Ah | **200 Ah** |
+| *Remaining Capacity* | 325,7 Ah | 199,8 Ah (SOC conservé, 99,9 %) |
+| Firmware, module, boot | V1.0.4_T1 / V1.4.11 / V2.21 | inchangés |
+| Seuils de protection, cycles (6) | | inchangés |
+
+Le pack 2 n'a pas bougé (325 / 314 Ah). Le système annonce 525 Ah au lieu
+de 651. Cellules à 3,353–3,354 V, 1 mV d'écart, aucune alarme : le pack est
+sain, c'est son compteur qui est faux. En décharge, son SOC descendra 1,6
+fois trop vite.
+
+Pendant ces quinze minutes le pack 1 n'a répondu à rien, et l'ESP a
+redémarré huit fois (l'uptime retombe à zéro à chaque fois ; cause non
+établie). Côté onduleurs, à 18:20 : perte de la liaison BMS, puis *Max
+Charge Current* à 400 A sur Ond1 et 1 000 A sur Ond2, restés ainsi.
+
+**Qui est qui, complété** : la page *PACK information* du module `BD1`
+(pack 1, maître) donne PACK SN 9141048225090032, BMS SN DJM2508290045,
+fabrication 03/09/2025. Le pack 2 est donc le 9141052925110027 du 17/11/2025.
+
+**À partir de 19:36, les réponses du pack 1 arrivent abîmées** sur le
+RS485 — celles du pack 2 restent propres, sur la même paire. Caractères
+hors hexadécimal (`<`, `?`, `>`, octets au-dessus de 0x7F), trames d'un
+caractère trop courtes, et un compteur de cycles lu à 0 au lieu de 6.
+
+**Le défaut que cela a révélé chez nous.** Aucun parseur ne vérifiait la
+somme de contrôle. Une trame d'alarme abîmée est partie telle quelle dans
+*Alarmes brut Pack1* ; Home Assistant refuse une chaîne qui n'est pas de
+l'UTF-8 et coupe la liaison API, se reconnecte, reçoit la même chaîne :
+trois reconnexions par seconde de 19:37 à 19:47, 108 entités qui
+clignotent, autant de lignes dans la base.
+
+Corrigé le soir même dans les six lectures (`analog`, `alarme`, `seuils`,
+deux packs) : une trame qui contient autre chose que de l'hexadécimal est
+rejetée, et la somme de contrôle PYLON est exigée **dès qu'elle a été vue
+juste une fois** depuis le démarrage (`p1_chk`, `p2_chk`) — on ne parie pas
+sur la conformité d'un BMS qui remplit mal ses trames. Vérifié après le
+flash : liaison API stable, pack 2 lu normalement, pack 1 rejeté à chaque
+cycle puis « Pas de réponse » au troisième, ce qui est l'affichage voulu.
+
+Rien n'a été écrit dans les BMS.

@@ -45,6 +45,12 @@ globals:
     restore_value: no
     initial_value: '0'
 
+  # Vrai des qu'une trame a presente une somme de controle juste.
+  - id: p2_chk
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
 script:
 
   - id: p2_analog
@@ -102,6 +108,23 @@ script:
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
           if (f.size() < 16) { echec(); return; }
+          // Trame abimee = trame rejetee, explication dans dc-pack1.yaml.
+          {
+            bool hex = true;
+            unsigned sum = 0;
+            for (size_t i = 0; hex && i < f.size(); i++) {
+              if (!isxdigit((unsigned char) f[i])) hex = false;
+              else if (i + 4 < f.size()) sum += (unsigned char) f[i];
+            }
+            bool chk = hex && ((0x10000 - (sum & 0xFFFF)) & 0xFFFF)
+                == (unsigned) strtol(f.substr(f.size() - 4).c_str(), nullptr, 16);
+            if (chk) id(p2_chk) = true;
+            if (!hex || (id(p2_chk) && !chk)) {
+              ESP_LOGW("p2", "analog : trame abimee, rejetee");
+              echec();
+              return;
+            }
+          }
           if (f.compare(6, 2, "00") != 0) {
             ESP_LOGW("p2", "analog : RTN=%s", f.substr(6, 2).c_str());
             echec();
@@ -221,6 +244,22 @@ script:
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
           if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          // Trame abimee = trame rejetee, voir p2_analog et dc-pack1.yaml.
+          {
+            bool hex = true;
+            unsigned sum = 0;
+            for (size_t i = 0; hex && i < f.size(); i++) {
+              if (!isxdigit((unsigned char) f[i])) hex = false;
+              else if (i + 4 < f.size()) sum += (unsigned char) f[i];
+            }
+            bool chk = hex && ((0x10000 - (sum & 0xFFFF)) & 0xFFFF)
+                == (unsigned) strtol(f.substr(f.size() - 4).c_str(), nullptr, 16);
+            if (chk) id(p2_chk) = true;
+            if (!hex || (id(p2_chk) && !chk)) {
+              ESP_LOGW("p2", "alarme : trame abimee, rejetee");
+              return;
+            }
+          }
           std::string info = f.substr(12, f.size() - 16);
           int len = (int) info.size();
 
@@ -286,6 +325,22 @@ script:
           std::string f = resp.substr(soi + 1);
           while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
           if (f.size() < 16 || f.compare(6, 2, "00") != 0) return;
+          // Trame abimee = trame rejetee, voir p2_analog et dc-pack1.yaml.
+          {
+            bool hex = true;
+            unsigned sum = 0;
+            for (size_t i = 0; hex && i < f.size(); i++) {
+              if (!isxdigit((unsigned char) f[i])) hex = false;
+              else if (i + 4 < f.size()) sum += (unsigned char) f[i];
+            }
+            bool chk = hex && ((0x10000 - (sum & 0xFFFF)) & 0xFFFF)
+                == (unsigned) strtol(f.substr(f.size() - 4).c_str(), nullptr, 16);
+            if (chk) id(p2_chk) = true;
+            if (!hex || (id(p2_chk) && !chk)) {
+              ESP_LOGW("p2", "seuils : trame abimee, rejetee");
+              return;
+            }
+          }
           std::string info = f.substr(12, f.size() - 16);
           if (info.size() < 50) return;
 
