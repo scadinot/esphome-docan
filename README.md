@@ -390,10 +390,12 @@ l'alarme de sous-tension, la coupure étant à 2,70 V.
 L'écran des packs montre toujours ce que le bus ne donne pas : MOS 23 °C et
 ambiance 25 °C quand les cellules sont à 20–21 °C.
 
-## 04/10/2026 — capacité du pack 1 passée à 200 Ah, trames abîmées — EN COURS
+## 04/10/2026 — capacité du pack 1 passée à 200 Ah, trames abîmées
 
-**Ce qui a changé dans le BMS du maître**, entre 18:10 et 18:25, sans
-qu'on sache encore par qui (question posée à l'utilisateur et à Docan) :
+**Le déclencheur : une modification des connexions des deux ESP, vers
+18:10.** Tout ce qui touche à la communication en découle. Ce qui a changé
+dans le BMS du maître pendant ce quart d'heure, en revanche, n'a pas
+d'explication :
 
 | Paramètre du pack 1 | 03/10 | 04/10, 19:34 |
 |---|---|---|
@@ -409,8 +411,8 @@ sain, c'est son compteur qui est faux. En décharge, son SOC descendra 1,6
 fois trop vite.
 
 Pendant ces quinze minutes le pack 1 n'a répondu à rien, et l'ESP a
-redémarré huit fois (l'uptime retombe à zéro à chaque fois ; cause non
-établie). Côté onduleurs, à 18:20 : perte de la liaison BMS, puis *Max
+redémarré huit fois (l'uptime retombe à zéro à chaque fois : ce sont les
+manipulations). Côté onduleurs, à 18:20 : perte de la liaison BMS, puis *Max
 Charge Current* à 400 A sur Ond1 et 1 000 A sur Ond2, restés ainsi.
 
 **Qui est qui, complété** : la page *PACK information* du module `BD1`
@@ -438,3 +440,19 @@ flash : liaison API stable, pack 2 lu normalement, pack 1 rejeté à chaque
 cycle puis « Pas de réponse » au troisième, ce qui est l'affichage voulu.
 
 Rien n'a été écrit dans les BMS.
+
+**Dénouement, 21:00.** Connexion côté pack 1 reprise par l'utilisateur : le
+pack répond de nouveau, sans une seule trame rejetée depuis. C'était un
+défaut de connexion, pas un défaut du BMS ni de l'application (fermer *BMS
+Insight* n'avait rien changé). Entre 19:48 et 21:00 l'ESP ne recevait plus
+que 4 à 10 octets sans `~` par interrogation.
+
+**Ce qui reste ouvert : les 200 Ah.** *Full* et *Design Capacity* du pack 1
+sont toujours à 200 Ah, le système à 525 Ah. Un câblage ne réécrit pas un
+paramètre ; le mécanisme n'est pas établi (redémarrage du BMS avec retour à
+des valeurs par défaut, ou trames parasites prises pour une écriture). À
+faire corriger par Docan, ou sur leur indication. Tant que c'est ainsi, le
+SOC du pack 1 et le SOC système sont faux en décharge.
+
+**À retenir.** Un pack dont les trames arrivent abîmées alors que l'autre
+est propre : regarder la connectique de ce pack avant tout le reste.
