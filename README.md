@@ -459,3 +459,21 @@ SOC du pack 1 et le SOC système sont faux en décharge.
 
 **À retenir.** Un pack dont les trames arrivent abîmées alors que l'autre
 est propre : regarder la connectique de ce pack avant tout le reste.
+
+**Précision du 05/10.** La modification portait sur la liaison de l'ESP aux
+deux batteries : beaucoup de faux contacts, et les fils A et B inversés un
+moment. Une inversion A/B n'abîme rien et ne fait arriver au BMS que des
+octets illisibles ; elle n'explique pas à elle seule une écriture. Ce que
+les valeurs suggèrent est un **retour aux valeurs par défaut** : 200 Ah
+tout rond sur les deux lignes (le « 200 » du nom du firmware), et rien
+d'autre n'a bougé — or les capacités étaient les seules valeurs propres à
+chaque pack dans le relevé du 03/10, les 36 autres paramètres étant
+identiques des deux côtés. Les compteurs (cycles) sont conservés. Ce qui a
+déclenché ce retour reste à établir avec Docan.
+
+**Règle pratique** : avant de retoucher ce câblage, débrancher les fiches
+côté packs, travailler, contrôler, puis rebrancher. Jamais de reprise de
+bornier avec les BMS au bout du fil.
+
+Contrôle du 05/10 à midi : aucune trame rejetée, les deux packs lus sans
+interruption depuis la veille 21:00.
