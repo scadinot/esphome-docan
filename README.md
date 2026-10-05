@@ -450,8 +450,11 @@ que 4 à 10 octets sans `~` par interrogation.
 **Ce qui reste ouvert : les 200 Ah.** *Full* et *Design Capacity* du pack 1
 sont toujours à 200 Ah, le système à 525 Ah. Un câblage ne réécrit pas un
 paramètre ; le mécanisme n'est pas établi (redémarrage du BMS avec retour à
-des valeurs par défaut, ou trames parasites prises pour une écriture). À
-faire corriger par Docan, ou sur leur indication. Tant que c'est ainsi, le
+des valeurs par défaut, ou trames parasites prises pour une écriture).
+L'application est hors de cause : rien n'y a été écrit, et l'écriture y
+est protégée par un mot de passe que nous n'avons pas. Message envoyé à
+Docan le 04/10 au soir (cause, bonnes valeurs, correction à distance ou mot
+de passe) ; réponse attendue. Tant que c'est ainsi, le
 SOC du pack 1 et le SOC système sont faux en décharge.
 
 **À retenir.** Un pack dont les trames arrivent abîmées alors que l'autre
