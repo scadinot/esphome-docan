@@ -477,3 +477,40 @@ bornier avec les BMS au bout du fil.
 
 Contrôle du 05/10 à midi : aucune trame rejetée, les deux packs lus sans
 interruption depuis la veille 21:00.
+
+## 23/10/2026 — capacité du pack 1 corrigée
+
+Pendant une coupure EDF, maison sur batterie, avec le logiciel PC du BMS
+(*DrStartApp*, page *Parameters → ParamsOpt*), branché sur la prise RS485
+du pack 1 à la place de l'ESP, 9600 bauds.
+
+**Adresses** : dans ce logiciel, **Addr 0 = pack 1 (maître)**, Addr 1 =
+pack 2. Avec Addr 1 on lit le pack 2 même branché sur le pack 1 : vérifier
+*Cap Full* et le PACK SN avant toute écriture.
+
+**Écriture** : une seule case cochée, bouton *Set checked*. **Jamais *Set
+all*** — il écrirait aussi les champs vides de la page (tensions OCV,
+protections matérielles). Unités : 0,01 Ah.
+
+| | Avant | Après |
+|---|---|---|
+| Design Capacity | 20000 | 32580 |
+| Full Capacity | 20000 | 32580 |
+| Remaining Capacity | 12270 | 24630 |
+
+Deux comportements du BMS appris en route :
+
+- il **refuse Full Capacity > Design Capacity** (32580 refusé tant que
+  Design valait 30000) : monter Design d'abord ;
+- à chaque changement de Full, il **recalcule Remaining au prorata** (SOC
+  conservé), ce qui est faux puisque les Ah déjà sortis ne changent pas. On
+  réécrit donc Remaining en dernier : Full − Ah sortis depuis la dernière
+  charge complète (79,3 Ah ce soir-là, recoupé par le compteur de l'ESP).
+
+Relu ensuite par l'ESP : pack 1 à 325,8 Ah, système 650,8 Ah, SOC système
+72,5 % ; le SOC envoyé aux onduleurs par le CAN est passé de ~66 à 72 % au
+moment de l'écriture. Design Capacity vaut désormais 325,8 Ah sur le pack 1
+(314 sur le pack 2) : c'est la condition pour que Full le soit.
+
+Pendant la coupure, le seuil de coupure des onduleurs (réglage 21) avait été
+abaissé de 20 à 15 % pour compenser les 200 Ah ; à remettre à 20 %.
