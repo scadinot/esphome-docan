@@ -513,4 +513,5 @@ moment de l'écriture. Design Capacity vaut désormais 325,8 Ah sur le pack 1
 (314 sur le pack 2) : c'est la condition pour que Full le soit.
 
 Pendant la coupure, le seuil de coupure des onduleurs (réglage 21) avait été
-abaissé de 20 à 15 % pour compenser les 200 Ah ; à remettre à 20 %.
+abaissé de 20 à 15 % pour compenser les 200 Ah ; une fois la capacité
+corrigée, l'utilisateur a choisi de le garder à 15 % (15 % réels désormais).
