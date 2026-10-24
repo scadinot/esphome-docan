@@ -514,4 +514,28 @@ moment de l'écriture. Design Capacity vaut désormais 325,8 Ah sur le pack 1
 
 Pendant la coupure, le seuil de coupure des onduleurs (réglage 21) avait été
 abaissé de 20 à 15 % pour compenser les 200 Ah ; une fois la capacité
-corrigée, l'utilisateur a choisi de le garder à 15 % (15 % réels désormais).
+corrigée, l'utilisateur l'a d'abord gardé à 15 %, puis remis à 20 % le
+24/10 (voir ci-dessous).
+
+## 24/10/2026 — première charge complète depuis le 04/10, et ce qu'elle montre
+
+Charge réseau du 23/10 20:51 au 24/10 06:57 (AC1 15 A, ~1,7 kW), environ
+154 Ah par pack. **Les compteurs ont atteint 100 % bien avant la fin** :
+le pack 1 à 02:30, puis ~65 Ah encore chargés ; le pack 2 à 04:00, puis
+~46 Ah. Avant la charge, ils surestimaient donc le restant de 50 à 65 Ah
+par pack. Explication retenue : en 19 jours au repos en UTI, de petits
+courants sous la résolution de 0,1 A du BMS (affichés 0,0 A) n'ont pas été
+comptés. Le SOC affiché pendant la coupure du 23/10 était donc ~10 points
+trop haut ; c'est pourquoi le seuil de coupure a été remis à 20 %.
+
+**À retenir** : après une longue période au repos, le SOC des BMS est
+optimiste. Seule une charge jusqu'à la tension de fin (56-57 V, courant qui
+retombe sous 2 A) le recale ; les compteurs, eux, plafonnent à 100 % avant.
+
+La charge s'est arrêtée à 06:57 à 54,9 V, interrompue par la fin de fenêtre
+(l'onduleur charge jusqu'à 06:59 à son horloge, en avance de 2 min 40). En
+rouvrant la fenêtre à 08:00, elle a **repris aussitôt malgré un SOC reçu de
+99 %** : le seuil de 95 % ne vaut que pour démarrer un cycle, un cycle
+inachevé reprend. Fin réelle à 08:31 : 56,92 / 56,99 V, cellules 3,53 à
+3,57 V, écart 29 et 15 mV en haut de charge, 100 % sur les deux packs.
+Fenêtre remise à 20 h → 6 h ensuite.
