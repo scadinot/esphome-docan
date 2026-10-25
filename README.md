@@ -539,3 +539,24 @@ rouvrant la fenêtre à 08:00, elle a **repris aussitôt malgré un SOC reçu de
 inachevé reprend. Fin réelle à 08:31 : 56,92 / 56,99 V, cellules 3,53 à
 3,57 V, écart 29 et 15 mV en haut de charge, 100 % sur les deux packs.
 Fenêtre remise à 20 h → 6 h ensuite.
+
+## 25/10/2026 — l'horloge des BMS n'est pas lisible sur le RS485
+
+Chaque pack a une horloge, réglable sur son écran : elle date le journal
+d'événements du BMS et ne pilote rien (les heures de charge sont celles des
+onduleurs). Essai de lecture par le service PYLON 4D, sous les deux formes
+habituelles (sans champ INFO, puis INFO = adresse) : **aucune réponse,
+0 octet, sur les deux packs**. Le 4D rejoint 4F, 83, 92 et B0 dans la liste
+des services absents de ce firmware (en-tête de `docan.yaml`).
+
+Le paquet d'essai `packages/dc-horloge.yaml` est gardé mais **non inclus** :
+lecture seule, aucune écriture (pas de 4E), décodage borné, dérive calculée
+à partir de deux `mktime` construits pareil. Pour le réactiver un jour,
+décommenter l'include et remettre les appels à `bms_clock` dans
+l'`interval` (la marche à suivre est en tête du paquet). Les entités
+créées pendant l'essai ont disparu d'elles-mêmes de Home Assistant au
+flash suivant. Seul vestige actif : `id: sntp_time` sur le composant
+`time`, sans effet.
+
+L'horloge des packs se règle donc à l'écran, sans toucher au menu du
+protocole des ports qui s'y trouve aussi.

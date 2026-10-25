@@ -17,6 +17,7 @@
 #   packages/dc-pack2.yaml .... idem pack 2 (adresse 02)
 #   packages/dc-cellules.yaml . les 32 tensions de cellules, 16 par pack
 #   packages/dc-systeme.yaml .. l'agregat des deux packs
+#   packages/dc-horloge.yaml .. horloge des BMS (4D) - MUET, paquet non inclus
 # =============================================================================
 # PROTOCOLE PYLON (ASCII, 9600 bps) - resume
 # ---------------------------------------------------------------------------
@@ -32,6 +33,9 @@
 #   Pack 2   ~20024642E00202FD33   analogique
 #            ~20024644E00202FD31   alarmes
 #            ~20024647E00202FD2E   seuils
+#   Horloge  ~2001464D0000FD9B / ~2001464DE00201FD23   pack 1, deux formes
+#            ~2002464D0000FD9A / ~2002464DE00202FD21   pack 2 - MUETTES
+#            (essayees le 25/10/2026, voir SURFACE EXPLOITABLE)
 #
 # LE PACK 2 A MIS DU TEMPS A REPONDRE, et ce n'etait NI le cablage NI les DIP :
 #   son protocole RS485-A etait reste sur un autre dialecte. Le reglage du
@@ -50,6 +54,11 @@
 #   de capacite (B0), et les versions du 51 sont des champs VIDES - le
 #   desaccord de firmware maitre V1.0.1 / esclave V1.0.4 reste illisible sur
 #   le bus, il faut le relever sur l'ecran.
+#   AJOUT 25/10/2026 : 4D (heure du BMS) MUET aussi, sur les deux packs et
+#   dans les deux formes - 0 octet en retour. L'horloge des packs existe
+#   (reglable a l'ecran) mais n'est pas lisible sur le RS485 en mode PYLON.
+#   Le paquet d'essai packages/dc-horloge.yaml est garde, non inclus, pour le
+#   jour ou un firmware l'ouvrirait.
 #
 # CE BMS EST UN DAREN : le service 51 renvoie deux fois la chaine ASCII "DR",
 #   prefixe des modeles Daren (DR48100, DR-JC03...). Le depot
@@ -129,6 +138,7 @@ packages:
   pack2:    !include packages/dc-pack2.yaml
   cellules: !include packages/dc-cellules.yaml
   systeme:  !include packages/dc-systeme.yaml
+  # horloge: !include packages/dc-horloge.yaml   # 4D muet, voir l'en-tete
 
 esphome:
   name: ${device_name}
@@ -155,6 +165,7 @@ web_server:
 
 time:
   - platform: sntp
+    id: sntp_time
     timezone: Europe/Paris
 
 api:

@@ -1,0 +1,183 @@
+# =============================================================================
+# HORLOGE DES BMS - CID2=4D, LECTURE SEULE - ajoute le 25/10/2026
+# =============================================================================
+# RESULTAT DE L'ESSAI, 25/10/2026 08:14 : MUET. Les deux packs, les deux
+#   formes : 0 octet en retour. Le paquet N'EST PLUS INCLUS (ligne commentee
+#   dans docan.yaml) ; il est garde pour le jour ou un firmware ouvrirait le
+#   service. Pour le reactiver : decommenter l'include ET remettre dans
+#   l'interval de docan.yaml les appels a bms_clock (forme 1, puis forme 2 si
+#   p1_clk_ok / p2_clk_ok restent faux), apres p2_param.
+#
+# PAQUET destine a docan.yaml. Ne se compile pas seul.
+#
+# POURQUOI : chaque pack a une horloge, reglable sur son ecran. Elle date le
+#   journal d'evenements du BMS ; elle ne pilote RIEN (les heures de charge
+#   sont celles des onduleurs). Le but est de la voir depuis Home Assistant,
+#   en particulier apres un changement d'heure.
+#
+# LE SERVICE 4D N'ETAIT PAS DANS L'INVENTAIRE DU 24/08 (voir l'en-tete de
+#   docan.yaml) : il est essaye ici sous les deux formes deja connues,
+#     forme 1 : sans champ INFO        ~2001464D0000FD9B   ~2002464D0000FD9A
+#     forme 2 : INFO = adresse du pack ~2001464DE00201FD23 ~2002464DE00202FD21
+#   la forme 2 n'etant tentee que si la forme 1 n'a rien donne de lisible.
+#
+# DECODAGE ATTENDU (protocole PYLON) : INFO = annee(4) mois(2) jour(2)
+#   heure(2) minute(2) seconde(2), en hexadecimal. Chaque champ est borne ;
+#   une date hors bornes n'est PAS publiee, la trame brute part dans le
+#   journal pour adapter le decodage.
+#
+# CE QUE CE PAQUET NE FAIT PAS, volontairement :
+#   - il n'ecrit RIEN dans le BMS (pas de 4E, pas de mise a l'heure) ;
+#   - il ne touche ni a p1_miss ni a p2_miss : un 4D muet est une
+#     information sur le firmware, pas une perte du pack.
+#
+# DERIVE = heure du BMS - heure SNTP de l'ESP, en secondes. Les deux heures
+#   sont reconstruites champ par champ et passees a mktime de la meme facon :
+#   mktime ignore le fuseau du composant time, on ne compare donc jamais un
+#   mktime a now.timestamp (piege note dans CLAUDE.md).
+# =============================================================================
+
+globals:
+  # Vrai quand la derniere lecture a donne une date valide.
+  - id: p1_clk_ok
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: p2_clk_ok
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+script:
+
+  # Un echange : envoie la trame (pack 1 ou 2, forme 1 ou 2), lit la reponse,
+  # publie si elle est valide. Appele depuis l'interval de docan.yaml, qui
+  # serialise les echanges et ne tente la forme 2 que si la forme 1 echoue.
+  - id: bms_clock
+    mode: single
+    parameters:
+      pack: int
+      forme: int
+    then:
+      - lambda: |-
+          static const char *trames[2][2] = {
+            {"~2001464D0000FD9B\r", "~2001464DE00201FD23\r"},
+            {"~2002464D0000FD9A\r", "~2002464DE00202FD21\r"}
+          };
+          if (pack < 1 || pack > 2 || forme < 1 || forme > 2) return;
+          (pack == 1 ? id(p1_clk_ok) : id(p2_clk_ok)) = false;
+          uint8_t c;
+          while (id(uart_bms).available()) id(uart_bms).read_byte(&c);
+          id(uart_bms).write_str(trames[pack - 1][forme - 1]);
+      - delay: 500ms
+      - lambda: |-
+          if (pack < 1 || pack > 2) return;
+          const char *tag = pack == 1 ? "clk1" : "clk2";
+          bool &ok = pack == 1 ? id(p1_clk_ok) : id(p2_clk_ok);
+          bool chk_vu = pack == 1 ? id(p1_chk) : id(p2_chk);
+
+          std::string resp;
+          uint8_t c;
+          while (id(uart_bms).available()) { id(uart_bms).read_byte(&c); resp += (char) c; }
+
+          size_t soi = resp.find('~');
+          if (soi == std::string::npos || resp.size() < soi + 17) {
+            ESP_LOGW(tag, "forme %d : pas de reponse (%d octets)", forme, (int) resp.size());
+            return;
+          }
+          std::string f = resp.substr(soi + 1);
+          while (!f.empty() && (f.back() == '\r' || f.back() == '\n')) f.pop_back();
+          if (f.size() < 16) {
+            ESP_LOGW(tag, "forme %d : trame courte (%d caracteres)", forme, (int) f.size());
+            return;
+          }
+          // Meme garde que les autres lectures (04/10/2026) : rien d'autre
+          // que de l'hexadecimal, et la somme de controle des qu'elle a ete
+          // vue juste sur ce pack.
+          bool hex = true;
+          unsigned sum = 0;
+          for (size_t i = 0; hex && i < f.size(); i++) {
+            if (!isxdigit((unsigned char) f[i])) hex = false;
+            else if (i + 4 < f.size()) sum += (unsigned char) f[i];
+          }
+          bool chk = hex && ((0x10000 - (sum & 0xFFFF)) & 0xFFFF)
+              == (unsigned) strtol(f.substr(f.size() - 4).c_str(), nullptr, 16);
+          if (!hex) {
+            ESP_LOGW(tag, "forme %d : trame abimee, rejetee (%d caracteres)", forme, (int) f.size());
+            return;
+          }
+          if (chk_vu && !chk) {
+            ESP_LOGW(tag, "forme %d : somme de controle fausse, rejetee", forme);
+            return;
+          }
+          std::string rtn = f.substr(6, 2);
+          std::string info = f.substr(12, f.size() - 16);
+          ESP_LOGW(tag, "forme %d : RTN=%s INFO=%s", forme, rtn.c_str(), info.c_str());
+          if (rtn != "00" || info.size() < 14) return;
+
+          auto h2 = [&](int p) -> int {
+            return (int) strtol(info.substr(p, 2).c_str(), nullptr, 16);
+          };
+          int an = (int) strtol(info.substr(0, 4).c_str(), nullptr, 16);
+          int mo = h2(4), jo = h2(6), hh = h2(8), mi = h2(10), se = h2(12);
+          if (an < 2020 || an > 2099 || mo < 1 || mo > 12 || jo < 1 || jo > 31 ||
+              hh > 23 || mi > 59 || se > 59) {
+            ESP_LOGW(tag, "forme %d : date hors bornes, non publiee", forme);
+            return;
+          }
+          ok = true;
+
+          char buf[24];
+          snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d", an, mo, jo, hh, mi, se);
+          (pack == 1 ? id(p1_clk_txt) : id(p2_clk_txt))->publish_state(buf);
+
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) return;
+          struct tm a = {};
+          a.tm_year = an - 1900; a.tm_mon = mo - 1; a.tm_mday = jo;
+          a.tm_hour = hh; a.tm_min = mi; a.tm_sec = se;
+          struct tm b = {};
+          b.tm_year = now.year - 1900; b.tm_mon = now.month - 1; b.tm_mday = now.day_of_month;
+          b.tm_hour = now.hour; b.tm_min = now.minute; b.tm_sec = now.second;
+          float derive = (float) difftime(mktime(&a), mktime(&b));
+          (pack == 1 ? id(p1_clk_drift) : id(p2_clk_drift))->publish_state(derive);
+
+sensor:
+
+  # Heure du BMS moins heure reelle. +3600 environ = pas passe a l'heure
+  # d'hiver ; quelques secondes = a l'heure.
+  - platform: template
+    name: "${upper_devicename} Horloge derive Pack1"
+    id: p1_clk_drift
+    unit_of_measurement: "s"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:clock-alert-outline
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Horloge derive Pack2"
+    id: p2_clk_drift
+    unit_of_measurement: "s"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:clock-alert-outline
+    entity_category: diagnostic
+    update_interval: never
+
+text_sensor:
+
+  - platform: template
+    name: "${upper_devicename} Horloge Pack1"
+    id: p1_clk_txt
+    icon: mdi:clock-outline
+    entity_category: diagnostic
+    update_interval: never
+
+  - platform: template
+    name: "${upper_devicename} Horloge Pack2"
+    id: p2_clk_txt
+    icon: mdi:clock-outline
+    entity_category: diagnostic
+    update_interval: never
