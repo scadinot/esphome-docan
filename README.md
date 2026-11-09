@@ -596,6 +596,10 @@ ce jour-là sont à 11:26 et 11:34, et touchent les deux packs à la fois).
   place de l'ESP, qui aurait alors perdu le pack. Restent un réapprentissage
   par le BMS lui-même, ou une écriture par le module WiFi (*BMS Insight*, ou
   Docan à distance comme le 29/09).
+- **Réponse de l'utilisateur le 09/11** : personne n'a touché aux packs ce
+  jour-là, à sa connaissance. Restent un réapprentissage par le BMS
+  lui-même, ou une intervention de Docan à distance sans prévenir ; rien ne
+  permet de trancher.
 - *Design Capacity* n'est pas relue : le bus PYLON ne la donne pas.
 
 Le pack 2 est à 325,0 Ah sans interruption depuis le 20/08 dans
