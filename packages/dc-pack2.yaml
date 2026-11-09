@@ -18,7 +18,9 @@
 # Tant que le pack 2 restait muet, deux chiffres ont circule ici comme des
 # faits. Ils ne l'etaient pas. Des que le pack a pu parler lui-meme :
 #
-#   "32.5 Ah"  ->  FAUX. Le pack 2 declare 325.87 Ah, comme le pack 1.
+#   "32.5 Ah"  ->  FAUX. Le pack 2 declare 325.0 Ah, a peine moins que les
+#     325.87 du pack 1 (325.0 constant dans l'historique HA depuis le 20/08 ;
+#     il etait ecrit 325.87 ici, corrige le 09/11/2026).
 #     Ce nombre venait d'une SOUSTRACTION faite en aout (358.4 - 325.87), donc
 #     d'une hypothese, et avait ensuite ete recopie comme une mesure. Le seul
 #     capteur qui aurait pu le confirmer etait injoignable.
@@ -219,7 +221,8 @@ script:
   # ---------------------------------------------------------------------------
   # CID2=44 : alarmes. T2 a 0x02 est filtre ici AUSSI - et c'est justement
   # parce que les DEUX packs portent ce meme drapeau, avec des firmwares
-  # differents (V1.0.1 cote maitre, V1.0.4 ici), que le champ est reconnu
+  # alors differents (V1.0.1 cote maitre, V1.0.4 ici ; les deux en V1.0.4
+  # depuis le 29/09/2026), que le champ est reconnu
   # comme non implemente plutot que comme un defaut de sonde.
   # Le raisonnement complet et les garde-fous sont dans dc-pack1.yaml.
   #

@@ -17,7 +17,7 @@ Ce dépôt est une copie versionnée. Les modifications partent du serveur.
 | Pack 1 | adresse PYLON 01, **maître**, DIP tous OFF, firmware BMS V1.0.4 depuis le 29/09/2026 (V1.0.1 avant) |
 | Pack 2 | adresse PYLON 02, esclave, DIP1 ON, firmware BMS V1.0.4 |
 | Liaison | RS485-A, 9600 8N1, TX GPIO17 / RX GPIO16 |
-| Capacités | 325,87 Ah et 325,00 Ah — 650,87 Ah au total |
+| Capacités | 325,0 Ah chacun, 650,0 Ah au total depuis le 04/11/2026 — historique du pack 1 dans les sections du 04/10, du 23/10 et du 04/11 |
 
 **Ne pas toucher au RS485-B** : c'est le lien de parallélisme entre les deux
 BMS.
@@ -216,6 +216,10 @@ période sans aucune charge. La conclusion tirée le 3 septembre — « le pack 
 a refusé de valider une charge complète » — était donc fausse. C'est écrit
 dans les deux fichiers de pack, au-dessus de l'entité.
 
+Au 08/11/2026 : 9 cycles sur le pack 1, 5 sur le pack 2. Le pack 1 lisait
+6 le 05/10 et 9 à la relecture du 23/10, juste après la correction de sa
+capacité ; ce saut n'est pas expliqué.
+
 ## Surface exploitable du BMS
 
 Établie par test le 24/08/2026, les deux formes de requête essayées :
@@ -306,9 +310,23 @@ changement. Le pilote UART de l'ESP-IDF alloue ce tampon sur le tas.
 
 ## Version ESPHome
 
-Compilé et flashé avec **2026.9.0** depuis le 26/09/2026 (2026.8.2 du 12 au
-26/09). Aucun composant `modbus` ici : les dépréciations de
-`command_throttle` puis de `skip_updates` ne concernent que le montage
+Compilé et flashé avec **2026.10.2** depuis le 05/11/2026 à 15:17
+(`sw_version` relevé dans Home Assistant le 08/11 ; l'ESP Growatt, en
+2026.10.2 aussi, a redémarré à la même minute). Ce flash n'avait pas été
+consigné ici. Serveur et dépôt étaient identiques au 08/11 : aucune
+modification de configuration.
+
+| Version | Flashée le |
+|---|---|
+| 2026.8.2 | 12/09/2026 |
+| 2026.9.0 | 26/09/2026 (OTA chiffré, voir plus bas) |
+| 2026.9.1 | 07/10/2026 |
+| 2026.10.0 | 23/10/2026 |
+| 2026.10.1 | 28/10/2026 |
+| 2026.10.2 | 05/11/2026 |
+
+Aucun composant `modbus` ici : les dépréciations de `command_throttle`, de
+`skip_updates` puis de `ModbusCommandItem` ne concernent que le montage
 Growatt. La 2026.9.0 n'a rien signalé sur ce fichier, hormis l'OTA.
 
 ## 26/09/2026 — OTA chiffré
@@ -560,3 +578,26 @@ flash suivant. Seul vestige actif : `id: sntp_time` sur le composant
 
 L'horloge des packs se règle donc à l'écran, sans toucher au menu du
 protocole des ports qui s'y trouve aussi.
+
+## 04/11/2026 — capacité du pack 1 : 325,8 → 325,0 Ah, sans intervention connue
+
+Relevé dans l'historique de Home Assistant le 08/11. Le 04/11 à 08:04:02,
+*Capacité totale Pack1* et *Capacité restante Pack1* passent ensemble de
+325,80 à 325,00 Ah. SOC resté à 100 %, courant 0,0 A, aucune trame perdue
+ni redémarrage de l'ESP à ce moment (les brèves coupures de la liaison API
+ce jour-là sont à 11:26 et 11:34, et touchent les deux packs à la fois).
+
+- Le pack 1 annonce désormais la même capacité que le pack 2 : 325,0 /
+  325,0 Ah, système 650,0 Ah. L'écart, 0,25 %, est sans effet pratique.
+- *Remaining* a suivi *Full* : c'est le recalcul au prorata appris le
+  23/10, à SOC 100 %. Le mécanisme est donc un changement de *Full* ; son
+  déclencheur n'est pas établi.
+- Le logiciel PC est peu probable : il se branche sur la prise RS485 à la
+  place de l'ESP, qui aurait alors perdu le pack. Restent un réapprentissage
+  par le BMS lui-même, ou une écriture par le module WiFi (*BMS Insight*, ou
+  Docan à distance comme le 29/09).
+- *Design Capacity* n'est pas relue : le bus PYLON ne la donne pas.
+
+Le pack 2 est à 325,0 Ah sans interruption depuis le 20/08 dans
+l'historique. Rien n'a été écrit dans les BMS. À surveiller : toute
+nouvelle variation de *Capacité totale* sans écriture de notre part.

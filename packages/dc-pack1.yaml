@@ -219,9 +219,10 @@ script:
           //
           // CONSEQUENCE : la temperature remontee ici est celle des CELLULES.
           // Le MOSFET, qui est le point chaud, tournait 6 C au-dessus a 58 A
-          // et reste invisible depuis Home Assistant. Le seuil de coupure a
-          // 65 C laisse une marge enorme, mais on ne voit pas l'element qui
-          // s'en approcherait le premier. Seul l'ecran du pack le montre.
+          // et reste invisible depuis Home Assistant. Le seuil de coupure en
+          // charge, 55 C (le bus annonce 65 C, decale de 10 C), laisse une
+          // marge enorme, mais on ne voit pas l'element qui s'en approcherait
+          // le premier. Seul l'ecran du pack le montre.
           p += 2;
           float tmax = -273.0f;
           std::string liste;
@@ -273,10 +274,11 @@ script:
   #
   # T2 EST FILTRE - decision du 26/08/2026, et voici pourquoi.
   #   L'octet d'alarme de la sonde 2 vaut 0x02 EN PERMANENCE. Constate sur les
-  #   DEUX packs, dont les BMS ont des firmwares differents (V1.0.1 et
-  #   V1.0.4), a 23 C pour un seuil a 65 C, identique a deux jours d'intervalle
-  #   et a travers une charge complete. Ce n'est pas une surchauffe : c'est un
-  #   champ que le protocole Docan ne remplit pas.
+  #   DEUX packs, dont les BMS avaient alors des firmwares differents (V1.0.1
+  #   et V1.0.4), a 23 C pour un seuil de 55 C (65 C lu sur le bus), identique
+  #   a deux jours d'intervalle et a travers une charge complete. Toujours la
+  #   le 08/11/2026, les deux packs en V1.0.4. Ce n'est pas une surchauffe :
+  #   c'est un champ que le protocole Docan ne remplit pas.
   #
   #   POURQUOI FILTRER PLUTOT QUE L'AFFICHER : une alarme qui ne dit jamais
   #   "OK" est inutilisable. On ne peut ni l'automatiser, ni en faire une
@@ -378,13 +380,22 @@ script:
   # ---------------------------------------------------------------------------
   # CID2=47 : seuils de protection. Constantes de configuration.
   #
-  # ETIQUETTES A VERIFIER : les valeurs relevees sont cellule 3.650 / 3.580 /
-  #   2.800 V et module 57.000 / 44.800 / 43.200 V. Une cellule LiFePO4 dont le
-  #   seuil "bas" serait a 3.580 V n'a aucun sens - c'est une tension de fin de
-  #   charge. Le second champ est vraisemblablement le RETOUR d'hysteresis de
-  #   la limite haute. NON VERIFIE.
-  # A RETENIR : la charge est bloquee sous 5 C. En local non chauffe, cela
-  #   explique les matinees d'hiver ou l'onduleur ne peut pas charger.
+  # ETIQUETTES - etablies le 03/10/2026 par le releve BMS Insight, qui
+  #   remplace l'hypothese d'hysteresis ecrite ici avant :
+  #     cellule  3.650 V  protection surtension   (Seuil cellule haute)
+  #              3.580 V  ALARME de surtension    (Seuil cellule basse)
+  #              2.800 V  alarme de sous-tension  (Seuil cellule sous-tension)
+  #     module  57.0 V    alarme haute            (Seuil module tension haute)
+  #             44.8 V    alarme basse            (Seuil module tension basse)
+  #             43.2 V    protection basse        (Seuil module sous-tension)
+  #   Les protections cellule 2.700 V et module 58.4 V ne sont pas dans la
+  #   trame. Deux noms d'entite sont donc trompeurs ; on ne les renomme pas.
+  # TEMPERATURES LUES 10 C TROP HAUT : 65 / 5 C en charge et 70 / -10 C en
+  #   decharge ici, pour 55 / -5 C et 60 / -20 C regles dans les BMS. Les
+  #   temperatures MESUREES, meme formule, tombent juste : c'est la trame qui
+  #   est decalee, pas le decodage. La charge est donc bloquee sous -5 C, et
+  #   non sous 5 C comme ecrit ici jusqu'au 09/11/2026. La reference est
+  #   l'ecran du pack ou l'application, pas ces entites.
   # ---------------------------------------------------------------------------
   - id: p1_param
     mode: single

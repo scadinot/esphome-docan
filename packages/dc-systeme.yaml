@@ -70,8 +70,9 @@
 # L'ANOMALIE "10 POUR 1" - deux affirmations retirees le 26/08/2026
 # ---------------------------------------------------------------------------
 # Des que le pack 2 a pu parler lui-meme, voir le detail dans dc-pack2.yaml :
-#   - le pack 2 pese 325.87 Ah, comme le pack 1. Les "32.5 Ah" venaient d'une
-#     soustraction, jamais d'une mesure.
+#   - le pack 2 pese 325.0 Ah, a peine moins que le pack 1 (325.87 a
+#     l'epoque). Les "32.5 Ah" venaient d'une soustraction, jamais d'une
+#     mesure.
 #   - le desequilibre de courant mesure est de 2.7 pour 1 au repos, pas de 10.
 #
 # "Repartition Pack1 Systeme" donne la part du courant total prise par le
@@ -209,7 +210,8 @@
 #   cellules, et il faudra la charge lente ci-dessus pour le resorber.
 #
 # TEMPERATURES : 20.4 C au depart, 30.8 C a l'arrivee apres sept heures dont
-#   deux a 60 A par pack. Seuil de coupure a 65 C, jamais approche.
+#   deux a 60 A par pack. Seuil de coupure en charge a 55 C (65 C lu sur le
+#   bus, decale de 10 C), jamais approche.
 #   ATTENTION, la sonde lue ici n'est PAS la plus chaude : l'ecran du BMS
 #   expose SIX temperatures (4 cellules, MOS, ENV) et le MOS tournait 6 C
 #   au-dessus des cellules a 58 A. Le protocole PYLON, lui, renvoie cinq fois

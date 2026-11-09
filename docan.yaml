@@ -52,8 +52,9 @@
 #   pas dans ce firmware. Question close.
 #   Consequence : pas d'historique des protections (83), pas de statistiques
 #   de capacite (B0), et les versions du 51 sont des champs VIDES - le
-#   desaccord de firmware maitre V1.0.1 / esclave V1.0.4 reste illisible sur
-#   le bus, il faut le relever sur l'ecran.
+#   firmware des BMS reste illisible sur le bus, il faut le relever sur
+#   l'ecran : V1.0.4 sur les deux packs depuis le 29/09/2026 (le maitre
+#   etait en V1.0.1 avant).
 #   AJOUT 25/10/2026 : 4D (heure du BMS) MUET aussi, sur les deux packs et
 #   dans les deux formes - 0 octet en retour. L'horloge des packs existe
 #   (reglable a l'ecran) mais n'est pas lisible sur le RS485 en mode PYLON.
@@ -72,7 +73,9 @@
 # 2. La trame analogique annonce 5 sondes, la trame d'alarme en annonce 4.
 # 3. L'octet d'alarme de la sonde 2 vaut 0x02 EN PERMANENCE - identique a
 #    deux jours d'intervalle, a travers une charge complete et un
-#    refroidissement, alors que le pack est a 23.6 C pour un seuil a 65 C.
+#    refroidissement, alors que le pack est a 23.6 C pour un seuil de 55 C
+#    (65 C lu sur le bus : les seuils de temperature du 47 arrivent 10 C
+#    trop haut, voir dc-pack1.yaml).
 #    Ce n'est pas une surchauffe, c'est un champ non implemente.
 #
 # D'ou l'alarme qui NOMME ce qui est leve : une entite binaire aurait affiche
