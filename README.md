@@ -605,3 +605,37 @@ ce jour-là sont à 11:26 et 11:34, et touchent les deux packs à la fois).
 Le pack 2 est à 325,0 Ah sans interruption depuis le 20/08 dans
 l'historique. Rien n'a été écrit dans les BMS. À surveiller : toute
 nouvelle variation de *Capacité totale* sans écriture de notre part.
+
+## 25-26/11/2026 — liaison RS485 muette, rétablie
+
+**Le 25/11, le pack 1 se tait à 16:56, le pack 2 à 17:12.** Coupure nette :
+lectures normales jusqu'à la dernière, aucune trame abîmée avant, puis
+`analog : pas de reponse (0 octets)` sur les deux packs. Personne n'avait
+touché au câblage. Le CAN vers les onduleurs est resté sain tout du long
+(pas d'erreur BMS, SOC reçu 98 %) : les BMS fonctionnaient.
+
+Écarté en chemin, le 26/11 : mise à jour (firmware `V1.0.4_T1`, module
+`V1.4.11`, inchangés), protocole de la prise RS485 (PYLON sur les deux
+écrans), session *BMS Insight* (non ouverte le 25/11 ; l'accès aux BMS se
+fait en Bluetooth).
+
+| 26/11 | Action | Résultat |
+|---|---|---|
+| 08:10 | redémarrage logiciel de l'ESP (bouton *Restart*) | rien, 0 octet |
+| 08:47 | ESP débranché puis rebranché | **pack 2 revient** |
+| 09:00 | nouveau reset de l'ESP | pack 1 toujours muet |
+| 09:49 | fiche « RS485 » du pack 1 débranchée et rebranchée, ESP redémarré | **pack 1 revient** |
+
+Relu ensuite à chaque cycle, sans avertissement : 325,0 / 325,0 Ah,
+cycles 9 et 5, SOC système 98,0 % (98 % par le CAN), alarmes OK. Rien n'a
+été écrit dans les BMS.
+
+**À retenir.**
+
+- Un redémarrage logiciel de l'ESP ne remet pas à zéro le module RS485,
+  alimenté en permanence par l'ESP. Après un silence total (0 octet),
+  **couper l'alimentation de l'ESP**, pas seulement le redémarrer.
+- Le pack 1 a demandé en plus une reprise de sa fiche : c'est la deuxième
+  fois après le 04/10. Sa connectique est le premier suspect.
+- Le déclencheur du 25/11 n'est pas établi : aucune intervention, et deux
+  packs tombés à quinze minutes d'écart.
