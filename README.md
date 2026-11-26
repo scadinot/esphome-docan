@@ -624,7 +624,7 @@ fait en Bluetooth).
 | 08:10 | redémarrage logiciel de l'ESP (bouton *Restart*) | rien, 0 octet |
 | 08:47 | ESP débranché puis rebranché | **pack 2 revient** |
 | 09:00 | nouveau reset de l'ESP | pack 1 toujours muet |
-| 09:49 | fiche « RS485 » du pack 1 débranchée et rebranchée, ESP redémarré | **pack 1 revient** |
+| 09:49 | ESP de nouveau débranché puis rebranché | **pack 1 revient** |
 
 Relu ensuite à chaque cycle, sans avertissement : 325,0 / 325,0 Ah,
 cycles 9 et 5, SOC système 98,0 % (98 % par le CAN), alarmes OK. Rien n'a
@@ -632,10 +632,15 @@ cycles 9 et 5, SOC système 98,0 % (98 % par le CAN), alarmes OK. Rien n'a
 
 **À retenir.**
 
-- Un redémarrage logiciel de l'ESP ne remet pas à zéro le module RS485,
-  alimenté en permanence par l'ESP. Après un silence total (0 octet),
-  **couper l'alimentation de l'ESP**, pas seulement le redémarrer.
-- Le pack 1 a demandé en plus une reprise de sa fiche : c'est la deuxième
-  fois après le 04/10. Sa connectique est le premier suspect.
+- **Aucune fiche n'a été touchée côté packs.** Seul l'ESP a été débranché
+  puis rebranché, deux fois ; un redémarrage logiciel n'avait rien fait.
+- Deux explications possibles, non tranchées : le module RS485, alimenté
+  par l'ESP, était bloqué et seule une coupure d'alimentation le remet à
+  zéro ; ou un contact du côté du module RS485 (fils A/B, bornier où
+  arrivent les câbles des deux packs) a bougé pendant la manipulation.
+  Piste de l'utilisateur : la connexion côté module.
+- Après un silence total (0 octet) : **débrancher puis rebrancher l'ESP**,
+  pas seulement le redémarrer. Si le défaut revient, regarder d'abord les
+  connexions côté module RS485.
 - Le déclencheur du 25/11 n'est pas établi : aucune intervention, et deux
   packs tombés à quinze minutes d'écart.
